@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0d1117">
+<title>RemoteBridge</title>
+<link rel="manifest" href="data:application/json,{%22name%22:%22RemoteBridge%22,%22short_name%22:%22RBridge%22,%22display%22:%22standalone%22,%22background_color%22:%22%230d1117%22,%22theme_color%22:%22%230d1117%22}">
+<style>
+  /* ── Reset & base ──────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; overflow: hidden; background: #0d1117; color: #e6edf3; font-family: 'DM Sans', 'Segoe UI', system-ui, sans-serif; }
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  /* ── Variables ──────────────────────────────────────────── */
+  :root {
+    --bg0: #0d1117; --bg1: #161b22; --bg2: #21262d; --bg3: #30363d;
+    --border: #30363d; --border-bright: #484f58;
+    --text0: #e6edf3; --text1: #c9d1d9; --text2: #8b949e; --text3: #6e7681;
+    --accent: #58a6ff; --accent-dim: #1f3a5c;
+    --green: #3fb950; --green-dim: #1a3a22;
+    --red: #f85149; --red-dim: #3d1a1a;
+    --yellow: #d29922; --yellow-dim: #332c00;
+    --purple: #bc8cff; --purple-dim: #2a1e3d;
+    --radius: 10px; --radius-sm: 6px;
+    --nav-h: 60px; --header-h: 56px;
+  }
+
+  /* ── Layout ─────────────────────────────────────────────── */
+  #app { display: flex; flex-direction: column; height: 100vh; }
+  #header { height: var(--header-h); background: var(--bg1); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 16px; gap: 12px; flex-shrink: 0; }
+  #content { flex: 1; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; }
+  #nav { height: var(--nav-h); background: var(--bg1); border-top: 1px solid var(--border); display: flex; flex-shrink: 0; }
+
+  /* ── Header ─────────────────────────────────────────────── */
+  .header-logo { font-size: 15px; font-weight: 600; letter-spacing: -0.3px; color: var(--text0); }
+  .header-logo span { color: var(--accent); }
+  .header-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text3); flex-shrink: 0; }
+  .status-dot.connected { background: var(--green); box-shadow: 0 0 6px var(--green); animation: pulse 2s infinite; }
+  .status-dot.error { background: var(--red); }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
+  .status-label { font-size: 12px; color: var(--text2); }
+  #btn-settings { background: none; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 6px 8px; color: var(--text2); cursor: pointer; font-size: 13px; }
+
+  /* ── Nav tabs ───────────────────────────────────────────── */
+  .nav-btn { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; background: none; border: none; color: var(--text3); cursor: pointer; font-size: 10px; transition: color .15s; padding-bottom: 4px; }
+  .nav-btn svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.8; }
+  .nav-btn.active { color: var(--accent); }
+  .nav-btn.active svg { stroke: var(--accent); }
+
+  /* ── Panels ─────────────────────────────────────────────── */
+  .panel { display: none; padding: 16px; }
+  .panel.active { display: block; }
+
+  /* ── Cards ──────────────────────────────────────────────── */
+  .card { background: var(--bg1); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; margin-bottom: 12px; }
+  .card-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text3); margin-bottom: 10px; }
+
+  /* ── Buttons ────────────────────────────────────────────── */
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 16px; border-radius: var(--radius-sm); border: none; font-size: 14px; font-weight: 500; cursor: pointer; transition: opacity .15s, transform .1s; width: 100%; }
+  .btn:active { transform: scale(0.97); }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-secondary { background: var(--bg2); color: var(--text1); border: 1px solid var(--border); }
+  .btn-danger { background: var(--red-dim); color: var(--red); border: 1px solid var(--red); }
+  .btn-success { background: var(--green-dim); color: var(--green); border: 1px solid var(--green); }
+  .btn-sm { padding: 6px 12px; font-size: 12px; width: auto; }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .btn-row { display: flex; gap: 8px; }
+  .btn-row .btn { flex: 1; }
+
+  /* ── Inputs ─────────────────────────────────────────────── */
+  input, textarea { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text0); font-size: 14px; padding: 10px 12px; width: 100%; font-family: inherit; outline: none; transition: border-color .15s; }
+  input:focus, textarea:focus { border-color: var(--accent); }
+  input[type="password"] { font-family: var(--font-mono, monospace); }
+  textarea { resize: vertical; min-height: 80px; font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+  label { display: block; font-size: 12px; color: var(--text2); margin-bottom: 6px; }
+  .field { margin-bottom: 12px; }
+
+  /* ── Badges ─────────────────────────────────────────────── */
+  .badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 500; }
+  .badge-green { background: var(--green-dim); color: var(--green); }
+  .badge-red { background: var(--red-dim); color: var(--red); }
+  .badge-yellow { background: var(--yellow-dim); color: var(--yellow); }
+  .badge-blue { background: var(--accent-dim); color: var(--accent); }
+
+  /* ── Toast notifications ────────────────────────────────── */
+  #toast-container { position: fixed; top: 70px; left: 50%; transform: translateX(-50%); z-index: 9999; display: flex; flex-direction: column; gap: 8px; pointer-events: none; width: calc(100% - 32px); max-width: 400px; }
+  .toast { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; font-size: 13px; animation: slideIn .25s ease; display: flex; align-items: center; gap: 8px; }
+  .toast.success { border-color: var(--green); }
+  .toast.error   { border-color: var(--red); }
+  .toast.warning { border-color: var(--yellow); }
+  @keyframes slideIn { from{opacity:0;transform:translateY(-10px)} to{opacity:1;transform:none} }
+
+  /* ── Status panel ───────────────────────────────────────── */
+  .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .stat-box { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 12px; }
+  .stat-val { font-size: 18px; font-weight: 600; color: var(--text0); }
+  .stat-lbl { font-size: 11px; color: var(--text3); margin-top: 2px; }
+
+  /* ── Progress bar ───────────────────────────────────────── */
+  .bar-wrap { background: var(--bg2); border-radius: 4px; height: 6px; margin-top: 4px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 4px; transition: width .5s; }
+
+  /* ── File list ──────────────────────────────────────────── */
+  .file-item { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .file-item:last-child { border-bottom: none; }
+  .file-icon { width: 32px; height: 32px; background: var(--bg2); border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
+  .file-info { flex: 1; min-width: 0; }
+  .file-name { font-size: 13px; font-weight: 500; color: var(--text0); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .file-meta { font-size: 11px; color: var(--text3); margin-top: 2px; }
+  .file-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+  /* ── Terminal output ────────────────────────────────────── */
+  #cmd-output { background: #010409; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #56d364; min-height: 120px; max-height: 300px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; margin-top: 8px; }
+  #cmd-output .prompt { color: var(--accent); }
+  #cmd-output .err { color: var(--red); }
+
+  /* ── Screenshot ─────────────────────────────────────────── */
+  #screenshot-img { width: 100%; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-top: 10px; display: none; }
+  #screenshot-ts { font-size: 11px; color: var(--text3); text-align: center; margin-top: 6px; }
+
+  /* ── Setup overlay ──────────────────────────────────────── */
+  #setup-overlay { position: fixed; inset: 0; background: var(--bg0); z-index: 100; display: flex; flex-direction: column; justify-content: center; padding: 32px 24px; }
+  #setup-overlay.hidden { display: none; }
+  .setup-title { font-size: 24px; font-weight: 600; margin-bottom: 6px; }
+  .setup-sub { font-size: 14px; color: var(--text2); margin-bottom: 28px; line-height: 1.5; }
+
+  /* ── Loading spinner ────────────────────────────────────── */
+  .spinner { width: 18px; height: 18px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .6s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Retry indicator ────────────────────────────────────── */
+  #retry-bar { background: var(--yellow-dim); border-bottom: 1px solid var(--yellow); padding: 6px 16px; font-size: 12px; color: var(--yellow); display: none; align-items: center; gap: 8px; flex-shrink: 0; }
+  #retry-bar.visible { display: flex; }
+
+  /* ── Clipboard area ─────────────────────────────────────── */
+  #clip-text { min-height: 100px; }
+
+  /* ── Quick commands ─────────────────────────────────────── */
+  .quick-cmds { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+  .qcmd { background: var(--bg2); border: 1px solid var(--border); border-radius: 20px; padding: 5px 12px; font-size: 12px; color: var(--text2); cursor: pointer; font-family: 'JetBrains Mono', monospace; }
+  .qcmd:active { background: var(--bg3); }
+
+  /* ── Empty state ────────────────────────────────────────── */
+  .empty { text-align: center; padding: 32px 16px; color: var(--text3); font-size: 14px; }
+  .empty svg { width: 40px; height: 40px; stroke: var(--text3); fill: none; stroke-width: 1.5; margin-bottom: 10px; }
+
+  /* ── Upload progress ────────────────────────────────────── */
+  #upload-progress { display: none; margin-top: 8px; }
+  #upload-bar { background: var(--bg2); border-radius: 4px; height: 8px; overflow: hidden; }
+  #upload-bar-fill { height: 100%; background: var(--accent); width: 0; transition: width .1s; }
+  #upload-label { font-size: 11px; color: var(--text2); margin-top: 4px; }
+</style>
+</head>
+<body>
+
+<!-- Setup overlay -->
+<div id="setup-overlay">
+  <div class="setup-title">Configurar<br><span style="color:var(--accent)">RemoteBridge</span></div>
+  <p class="setup-sub">Ingresa la URL que aparece en la PC cuando ejecutas el script PowerShell, y el PIN de acceso.</p>
+
+  <div class="field">
+    <label>URL del servidor (desde la PC)</label>
+    <input type="url" id="setup-url" placeholder="https://abc123.serveo.net" inputmode="url" autocomplete="off" autocorrect="off" spellcheck="false">
+  </div>
+  <div class="field">
+    <label>PIN de acceso</label>
+    <input type="password" id="setup-pin" placeholder="1234" inputmode="numeric" maxlength="20">
+  </div>
+  <button class="btn btn-primary" onclick="saveConfig()" style="margin-top:8px">
+    Conectar
+  </button>
+  <p style="font-size:12px;color:var(--text3);text-align:center;margin-top:16px">
+    La URL y el PIN los ves en la pantalla de la PC al ejecutar el script.
+  </p>
+</div>
+
+<!-- Toast container -->
+<div id="toast-container"></div>
+
+<!-- Main app -->
+<div id="app">
+
+  <!-- Header -->
+  <div id="header">
+    <div class="header-logo">Remote<span>Bridge</span></div>
+    <div class="header-right">
+      <div class="status-dot" id="status-dot"></div>
+      <span class="status-label" id="status-label">Desconectado</span>
+      <button id="btn-settings" onclick="showSettings()">⚙</button>
+    </div>
+  </div>
+
+  <!-- Retry bar -->
+  <div id="retry-bar">
+    <div class="spinner" style="width:14px;height:14px;border-width:1.5px;border-top-color:var(--yellow)"></div>
+    <span id="retry-msg">Reconectando...</span>
+  </div>
+
+  <!-- Content -->
+  <div id="content">
+
+    <!-- Panel: Estado -->
+    <div class="panel active" id="panel-status">
+      <div class="card" id="pc-info-card">
+        <div class="card-title">Estado de la PC</div>
+        <div id="pc-loading" style="text-align:center;padding:20px;color:var(--text3);font-size:13px">
+          Cargando...
+        </div>
+        <div id="pc-info" style="display:none">
+          <div class="stat-grid" id="stat-grid"></div>
+          <div style="margin-top:10px;font-size:12px;color:var(--text3)">
+            <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+              <span>CPU</span><span id="cpu-val">—</span>
+            </div>
+            <div class="bar-wrap"><div class="bar-fill" id="cpu-bar" style="background:var(--accent);width:0%"></div></div>
+            <div style="display:flex;justify-content:space-between;margin:8px 0 4px">
+              <span>RAM</span><span id="ram-val">—</span>
+            </div>
+            <div class="bar-wrap"><div class="bar-fill" id="ram-bar" style="background:var(--purple);width:0%"></div></div>
+          </div>
+        </div>
+      </div>
+      <button class="btn btn-secondary" onclick="loadStatus()">
+        <svg viewBox="0 0 24 24" style="width:16px;height:16px"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+        Actualizar estado
+      </button>
+    </div>
+
+    <!-- Panel: Portapapeles -->
+    <div class="panel" id="panel-clip">
+      <div class="card">
+        <div class="card-title">Leer portapapeles de la PC</div>
+        <button class="btn btn-secondary" onclick="getClipboard()" id="btn-get-clip">
+          <svg viewBox="0 0 24 24" style="width:16px;height:16px"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
+          Leer portapapeles de la PC
+        </button>
+        <div id="clip-result" style="margin-top:10px;display:none">
+          <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;font-size:13px;color:var(--text1);white-space:pre-wrap;max-height:200px;overflow-y:auto;word-break:break-all" id="clip-content"></div>
+          <div class="btn-row" style="margin-top:8px">
+            <button class="btn btn-sm btn-secondary" onclick="copyToLocal()">Copiar en móvil</button>
+            <span style="font-size:11px;color:var(--text3);align-self:center" id="clip-len"></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Enviar texto a la PC</div>
+        <div class="field">
+          <textarea id="clip-text" placeholder="Escribe o pega aquí el texto que quieres enviar al portapapeles de la PC..."></textarea>
+        </div>
+        <button class="btn btn-primary" onclick="setClipboard()">
+          <svg viewBox="0 0 24 24" style="width:16px;height:16px"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
+          Enviar a portapapeles de la PC
+        </button>
+      </div>
+    </div>
+
+    <!-- Panel: Archivos -->
+    <div class="panel" id="panel-files">
+      <div class="card">
+        <div class="card-title">Subir archivo al PC</div>
+        <input type="file" id="file-input" multiple style="display:none" onchange="uploadFiles(this.files)">
+        <button class="btn btn-primary" onclick="document.getElementById('file-input').click()">
+          <svg viewBox="0 0 24 24" style="width:16px;height:16px"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
+          Seleccionar archivos
+        </button>
+        <div id="upload-progress">
+          <div id="upload-bar"><div id="upload-bar-fill"></div></div>
+          <div id="upload-label">Subiendo...</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <div class="card-title" style="margin-bottom:0">Archivos en la PC</div>
+          <button class="btn btn-sm btn-secondary" onclick="loadFiles()">↻ Refrescar</button>
+        </div>
+        <div id="file-list">
+          <div class="empty">
+            <svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            <div>Cargando archivos...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Panel: Terminal -->
+    <div class="panel" id="panel-cmd">
+      <div class="card">
+        <div class="card-title">Comandos rápidos</div>
+        <div class="quick-cmds" id="quick-cmds">
+          <span class="qcmd" onclick="runQuick('dir /b')">dir</span>
+          <span class="qcmd" onclick="runQuick('whoami')">whoami</span>
+          <span class="qcmd" onclick="runQuick('ipconfig')">ipconfig</span>
+          <span class="qcmd" onclick="runQuick('tasklist | Select-Object -First 10')">procesos</span>
+          <span class="qcmd" onclick="runQuick('Get-Date')">fecha/hora</span>
+          <span class="qcmd" onclick="runQuick('Get-Disk | Select-Object Number,FriendlyName,Size')">discos</span>
+          <span class="qcmd" onclick="runQuick('netstat -n | Select-Object -First 15')">netstat</span>
+          <span class="qcmd" onclick="runQuick('systeminfo | Select-String \"OS Name\",\"Total Physical\"')">sysinfo</span>
+        </div>
+        <div class="field">
+          <label>Comando PowerShell</label>
+          <input type="text" id="cmd-input" placeholder="Get-Process | Sort CPU -desc | Select -First 5" autocorrect="off" autocapitalize="off" spellcheck="false" onkeydown="if(event.key==='Enter')runCmd()">
+        </div>
+        <button class="btn btn-primary" onclick="runCmd()" id="btn-run-cmd">
+          <svg viewBox="0 0 24 24" style="width:16px;height:16px"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+          Ejecutar comando
+        </button>
+        <div id="cmd-output" style="display:none"></div>
+      </div>
+    </div>
+
+    <!-- Panel: Pantalla -->
+    <div class="panel" id="panel-screen">
+      <div class="card">
+        <div class="card-title">Captura de pantalla</div>
+        <p style="font-size:13px;color:var(--text2);margin-bottom:12px;line-height:1.5">
+          Toma una captura de la pantalla actual de la PC. La imagen se comprime para ahorrar datos móviles.
+        </p>
+        <div class="btn-row">
+          <button class="btn btn-primary" onclick="takeScreenshot()" id="btn-screenshot">
+            <svg viewBox="0 0 24 24" style="width:16px;height:16px"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+            Capturar pantalla
+          </button>
+          <button class="btn btn-secondary btn-sm" onclick="autoScreenshot()" id="btn-auto" style="width:auto;padding:10px 14px">⏱</button>
+        </div>
+        <div id="auto-label" style="font-size:12px;color:var(--text3);margin-top:6px;display:none">Auto-captura activa</div>
+        <img id="screenshot-img" alt="Captura de pantalla de la PC" onclick="zoomScreenshot(this)">
+        <div id="screenshot-ts"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Bottom Nav -->
+  <nav id="nav">
+    <button class="nav-btn active" onclick="showPanel('status',this)" id="nav-status">
+      <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+      Estado
+    </button>
+    <button class="nav-btn" onclick="showPanel('clip',this)" id="nav-clip">
+      <svg viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
+      Texto
+    </button>
+    <button class="nav-btn" onclick="showPanel('files',this)" id="nav-files">
+      <svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+      Archivos
+    </button>
+    <button class="nav-btn" onclick="showPanel('cmd',this)" id="nav-cmd">
+      <svg viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+      Terminal
+    </button>
+    <button class="nav-btn" onclick="showPanel('screen',this)" id="nav-screen">
+      <svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+      Pantalla
+    </button>
+  </nav>
+</div>
+
+<script>
+// ── Config ────────────────────────────────────────────────────
+let BASE_URL = localStorage.getItem('rb_url') || '';
+let PIN      = localStorage.getItem('rb_pin') || '';
+let connected = false;
+let retryCount = 0;
+let retryTimer = null;
+let autoTimer  = null;
+
+// ── Helpers ───────────────────────────────────────────────────
+function toast(msg, type='info', duration=3000) {
+  const icons = { success:'✓', error:'✕', warning:'⚠', info:'ℹ' };
+  const colors = { success:'var(--green)', error:'var(--red)', warning:'var(--yellow)', info:'var(--accent)' };
+  const t = document.createElement('div');
+  t.className = `toast ${type}`;
+  t.innerHTML = `<span style="color:${colors[type]};font-size:16px;flex-shrink:0">${icons[type]}</span><span>${msg}</span>`;
+  const c = document.getElementById('toast-container');
+  c.appendChild(t);
+  setTimeout(() => { t.style.opacity='0'; t.style.transition='opacity .3s'; setTimeout(()=>t.remove(),300); }, duration);
+}
+
+function setStatus(s) {
+  const dot = document.getElementById('status-dot');
+  const lbl = document.getElementById('status-label');
+  dot.className = 'status-dot' + (s==='connected'?' connected':s==='error'?' error':'');
+  lbl.textContent = s==='connected' ? 'Conectado' : s==='error' ? 'Error' : 'Desconectado';
+  connected = s === 'connected';
+}
+
+function showRetry(msg) {
+  const bar = document.getElementById('retry-bar');
+  document.getElementById('retry-msg').textContent = msg;
+  bar.classList.add('visible');
+}
+function hideRetry() { document.getElementById('retry-bar').classList.remove('visible'); }
+
+// ── Fetch con reintentos y timeout ────────────────────────────
+async function apiFetch(path, options={}, timeoutMs=12000, retries=2) {
+  if (!BASE_URL) { toast('Configura la URL primero','error'); return null; }
+
+  const url = BASE_URL.replace(/\/$/, '') + path + (path.includes('?')?'&':'?') + `pin=${encodeURIComponent(PIN)}`;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const res = await fetch(url, { ...options, signal: controller.signal,
+        headers: { 'X-PIN': PIN, ...(options.headers||{}) }
+      });
+      clearTimeout(timer);
+
+      if (res.status === 401) { toast('PIN incorrecto. Revísalo en configuración.','error',5000); return null; }
+      if (!res.ok && res.status !== 404) {
+        const err = await res.json().catch(()=>({error:`HTTP ${res.status}`}));
+        throw new Error(err.error || `HTTP ${res.status}`);
+      }
+      return res;
+    } catch (e) {
+      clearTimeout(timer);
+      if (e.name === 'AbortError') {
+        if (attempt < retries) {
+          showRetry(`Timeout. Reintentando (${attempt+1}/${retries})...`);
+          await sleep(2000 * (attempt+1));
+          continue;
+        }
+        toast('La PC tardó mucho en responder. ¿Está activo el script?','error',5000);
+        setStatus('error');
+        return null;
+      }
+      if (attempt < retries && (e.message.includes('fetch')||e.message.includes('network')||e.message.includes('Failed'))) {
+        showRetry(`Sin conexión. Reintentando (${attempt+1}/${retries})...`);
+        await sleep(3000 * (attempt+1));
+        continue;
+      }
+      toast(`Error: ${e.message}`,'error',4000);
+      setStatus('error');
+      return null;
+    }
+  }
+  return null;
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ── Config / Setup ─────────────────────────────────────────────
+function showSettings() {
+  document.getElementById('setup-url').value = BASE_URL;
+  document.getElementById('setup-pin').value = PIN;
+  document.getElementById('setup-overlay').classList.remove('hidden');
+}
+
+function saveConfig() {
+  const url = document.getElementById('setup-url').value.trim().replace(/\/$/, '');
+  const pin = document.getElementById('setup-pin').value.trim();
+  if (!url) { toast('Ingresa la URL del servidor','error'); return; }
+  if (!url.startsWith('http')) { toast('La URL debe comenzar con http:// o https://','error'); return; }
+  BASE_URL = url;
+  PIN      = pin;
+  localStorage.setItem('rb_url', url);
+  localStorage.setItem('rb_pin', pin);
+  document.getElementById('setup-overlay').classList.add('hidden');
+  toast('Configuración guardada','success');
+  loadStatus();
+}
+
+// ── Navigation ─────────────────────────────────────────────────
+function showPanel(name, btn) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('panel-' + name).classList.add('active');
+  if (btn) btn.classList.add('active');
+  if (name === 'files') loadFiles();
+  if (name === 'status') loadStatus();
+}
+
+// ── Status ─────────────────────────────────────────────────────
+async function loadStatus() {
+  document.getElementById('pc-loading').style.display='block';
+  document.getElementById('pc-info').style.display='none';
+
+  const res = await apiFetch('/status');
+  if (!res) { setStatus('error'); return; }
+
+  const d = await res.json();
+  setStatus('connected');
+  hideRetry();
+  retryCount = 0;
+
+  document.getElementById('pc-loading').style.display='none';
+  document.getElementById('pc-info').style.display='block';
+
+  document.getElementById('stat-grid').innerHTML = `
+    <div class="stat-box"><div class="stat-val">${d.host||'—'}</div><div class="stat-lbl">Equipo</div></div>
+    <div class="stat-box"><div class="stat-val">${d.user||'—'}</div><div class="stat-lbl">Usuario</div></div>
+    <div class="stat-box"><div class="stat-val">${d.uptime||'—'}</div><div class="stat-lbl">Tiempo activo</div></div>
+    <div class="stat-box"><div class="stat-val">${d.disk_free||'—'}</div><div class="stat-lbl">Disco libre</div></div>
+  `;
+  const cpu = d.cpu_pct || 0;
+  const ram = d.ram_pct || 0;
+  document.getElementById('cpu-val').textContent = cpu + '%';
+  document.getElementById('ram-val').textContent = ram + '%';
+  document.getElementById('cpu-bar').style.width = cpu + '%';
+  document.getElementById('cpu-bar').style.background = cpu>80?'var(--red)':cpu>50?'var(--yellow)':'var(--accent)';
+  document.getElementById('ram-bar').style.width = ram + '%';
+  document.getElementById('ram-bar').style.background = ram>80?'var(--red)':ram>60?'var(--yellow)':'var(--purple)';
+}
+
+// ── Clipboard ──────────────────────────────────────────────────
+async function getClipboard() {
+  const btn = document.getElementById('btn-get-clip');
+  btn.disabled = true; btn.textContent = 'Leyendo...';
+  const res = await apiFetch('/clipboard/get');
+  btn.disabled = false; btn.innerHTML = `<svg viewBox="0 0 24 24" style="width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>Leer portapapeles de la PC`;
+  if (!res) return;
+  const d = await res.json();
+  const box = document.getElementById('clip-result');
+  document.getElementById('clip-content').textContent = d.text || '(vacío)';
+  document.getElementById('clip-len').textContent = `${d.length||0} caracteres`;
+  box.style.display = 'block';
+  toast('Portapapeles leído','success');
+}
+
+function copyToLocal() {
+  const text = document.getElementById('clip-content').textContent;
+  navigator.clipboard.writeText(text).then(()=>toast('Copiado en el móvil','success')).catch(()=>toast('No se pudo copiar','error'));
+}
+
+async function setClipboard() {
+  const text = document.getElementById('clip-text').value;
+  if (!text) { toast('Escribe algo primero','warning'); return; }
+  const res = await apiFetch('/clipboard/set', {
+    method:'POST', body: JSON.stringify({text}), headers:{'Content-Type':'application/json'}
+  });
+  if (!res) return;
+  const d = await res.json();
+  if (d.ok) toast(`Texto enviado al portapapeles (${d.length} chars)`,'success');
+}
+
+// ── Files ──────────────────────────────────────────────────────
+const fileIcons = { pdf:'📄', doc:'📝', docx:'📝', xls:'📊', xlsx:'📊', ppt:'📋', pptx:'📋',
+  jpg:'🖼', jpeg:'🖼', png:'🖼', gif:'🖼', mp4:'🎬', mp3:'🎵', zip:'🗜', rar:'🗜',
+  txt:'📃', csv:'📊', py:'🐍', js:'⚡', html:'🌐', default:'📦' };
+
+function fileIcon(ext) { return fileIcons[ext?.toLowerCase()] || fileIcons.default; }
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
+  return (bytes/1024/1024).toFixed(1) + ' MB';
+}
+
+async function loadFiles() {
+  const list = document.getElementById('file-list');
+  list.innerHTML = '<div class="empty">Cargando...</div>';
+  const res = await apiFetch('/files');
+  if (!res) { list.innerHTML = '<div class="empty">Error cargando archivos</div>'; return; }
+  const d = await res.json();
+  const files = d.files || [];
+  if (files.length === 0) {
+    list.innerHTML = `<div class="empty"><svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg><div>Sin archivos. Pon archivos en la carpeta RemoteBridge de la PC.</div></div>`;
+    return;
+  }
+  list.innerHTML = files.map(f => `
+    <div class="file-item">
+      <div class="file-icon">${fileIcon(f.ext)}</div>
+      <div class="file-info">
+        <div class="file-name">${f.name}</div>
+        <div class="file-meta">${formatSize(f.size)} · ${f.modified}</div>
+      </div>
+      <div class="file-actions">
+        <button class="btn btn-sm btn-secondary" onclick="downloadFile('${encodeURIComponent(f.name)}','${f.name}')">↓</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteFile('${encodeURIComponent(f.name)}','${f.name}')">✕</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function downloadFile(encodedName, displayName) {
+  toast(`Descargando ${displayName}...`, 'info', 2000);
+  const url = BASE_URL.replace(/\/$/,'') + `/files/download/${encodedName}?pin=${encodeURIComponent(PIN)}`;
+  try {
+    const res = await fetch(url, { headers: {'X-PIN': PIN} });
+    if (!res.ok) { toast('Error al descargar','error'); return; }
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = displayName;
+    a.click();
+    toast(`${displayName} descargado`,'success');
+  } catch(e) { toast('Error de red al descargar','error'); }
+}
+
+async function deleteFile(encodedName, displayName) {
+  if (!confirm(`¿Borrar "${displayName}"?`)) return;
+  const res = await apiFetch(`/files/delete/${encodedName}`, { method:'DELETE' });
+  if (!res) return;
+  const d = await res.json();
+  if (d.ok) { toast(`${displayName} eliminado`,'success'); loadFiles(); }
+}
+
+async function uploadFiles(files) {
+  if (!files.length) return;
+  const prog = document.getElementById('upload-progress');
+  const bar  = document.getElementById('upload-bar-fill');
+  const lbl  = document.getElementById('upload-label');
+  prog.style.display = 'block';
+
+  let done = 0;
+  for (const file of files) {
+    lbl.textContent = `Subiendo ${file.name} (${formatSize(file.size)})...`;
+    try {
+      const url = BASE_URL.replace(/\/$/,'') + `/files/upload?pin=${encodeURIComponent(PIN)}`;
+      const res = await fetch(url, {
+        method:'POST', body: file,
+        headers: { 'X-PIN': PIN, 'X-Filename': file.name, 'Content-Type': 'application/octet-stream' }
+      });
+      const d = await res.json();
+      if (d.ok) { done++; toast(`${file.name} subido`,'success'); }
+      else { toast(`Error subiendo ${file.name}`,'error'); }
+    } catch(e) { toast(`Error de red: ${file.name}`,'error'); }
+    bar.style.width = (done / files.length * 100) + '%';
+  }
+  setTimeout(() => { prog.style.display='none'; bar.style.width='0%'; }, 1500);
+  loadFiles();
+  document.getElementById('file-input').value = '';
+}
+
+// ── Terminal ───────────────────────────────────────────────────
+async function runCmd() {
+  const input = document.getElementById('cmd-input');
+  const cmd = input.value.trim();
+  if (!cmd) { toast('Escribe un comando','warning'); return; }
+
+  const out = document.getElementById('cmd-output');
+  const btn = document.getElementById('btn-run-cmd');
+  btn.disabled = true; btn.textContent = 'Ejecutando...';
+  out.style.display = 'block';
+  out.innerHTML = `<span class="prompt">PS > ${escapeHtml(cmd)}\n</span><span style="color:var(--text3)">Esperando respuesta de la PC...</span>`;
+
+  const res = await apiFetch('/cmd', {
+    method:'POST', body: JSON.stringify({command: cmd}), headers:{'Content-Type':'application/json'}
+  }, 20000, 1);
+
+  btn.disabled = false;
+  btn.innerHTML = `<svg viewBox="0 0 24 24" style="width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>Ejecutar comando`;
+
+  if (!res) { out.innerHTML += `\n<span class="err">[Sin respuesta de la PC]</span>`; return; }
+  const d = await res.json();
+  const output = d.output || '(sin salida)';
+  out.innerHTML = `<span class="prompt">PS > ${escapeHtml(cmd)}\n</span>${escapeHtml(output)}`;
+  out.scrollTop = out.scrollHeight;
+}
+
+function runQuick(cmd) {
+  document.getElementById('cmd-input').value = cmd;
+  runCmd();
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Screenshot ─────────────────────────────────────────────────
+let autoActive = false;
+
+async function takeScreenshot() {
+  const btn = document.getElementById('btn-screenshot');
+  btn.disabled = true; btn.textContent = 'Capturando...';
+  const res = await apiFetch('/screenshot', {}, 30000, 1);
+  btn.disabled = false;
+  btn.innerHTML = `<svg viewBox="0 0 24 24" style="width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>Capturar pantalla`;
+  if (!res) return;
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const img = document.getElementById('screenshot-img');
+  img.src = url; img.style.display='block';
+  document.getElementById('screenshot-ts').textContent = 'Actualizado: ' + new Date().toLocaleTimeString();
+  toast('Captura lista','success',1500);
+}
+
+function autoScreenshot() {
+  const btn = document.getElementById('btn-auto');
+  const lbl = document.getElementById('auto-label');
+  if (autoActive) {
+    clearInterval(autoTimer); autoActive=false;
+    btn.textContent='⏱'; lbl.style.display='none';
+    toast('Auto-captura desactivada','info');
+  } else {
+    autoActive=true; btn.textContent='⏹'; lbl.style.display='block';
+    takeScreenshot();
+    autoTimer = setInterval(takeScreenshot, 10000);
+    toast('Auto-captura cada 10s','success');
+  }
+}
+
+function zoomScreenshot(img) {
+  window.open(img.src, '_blank');
+}
+
+// ── Init ───────────────────────────────────────────────────────
+window.addEventListener('load', () => {
+  if (!BASE_URL || !PIN) {
+    document.getElementById('setup-overlay').classList.remove('hidden');
+  } else {
+    document.getElementById('setup-overlay').classList.add('hidden');
+    loadStatus();
+  }
+});
+
+// Reconexión automática en background cada 60s
+setInterval(async () => {
+  if (!BASE_URL || !connected) return;
+  const res = await fetch(BASE_URL.replace(/\/$/,'') + '/ping', { signal: AbortSignal.timeout(5000) }).catch(()=>null);
+  if (!res || !res.ok) { setStatus('error'); showRetry('Conexión perdida. Reconectando...'); }
+  else { setStatus('connected'); hideRetry(); }
+}, 60000);
+</script>
+</body>
+</html>
