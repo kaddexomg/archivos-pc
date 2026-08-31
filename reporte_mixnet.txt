@@ -1,0 +1,447 @@
+=== RESUMEN ===
+Carpetas: 23982
+Archivos: 267942
+Tamaño total: 98.84 GB
+Errores de acceso: 842
+
+=== ARCHIVOS POR TIPO ===
+  212018  OTRO
+   31376  DBF
+   11409  TXT
+    5420  INI
+    1865  PDF
+    1610  XML
+    1529  JSON
+     686  EXCEL
+     652  DAT
+     568  WORD
+     235  SQLITE_DB
+     111  SQL
+     104  BACKUP
+      90  CSV
+      46  ZIP
+       5  ACCESS
+
+=== ARCHIVOS DE DATOS (relevantes, agrupados) ===
+  [OTRO] 768.1 MB  C:\Windows\SoftwareDistribution\DataStore\DataStore.edb
+  [OTRO] 548.0 MB  C:\ProgramData\BlueStacks\Android\Data.vdi
+  [OTRO] 220.0 MB  C:\Users\Almacen\AppData\Local\Google\Chrome\User Data\Default\Cache\Cache_Data\data_3
+  [OTRO] 174.5 MB  C:\hOY\ISABEL\DCIM\.thumbnails\.thumbdata3-1763508120
+  [OTRO] 174.5 MB  C:\Users\GLADIS\Desktop\ISABEL\DCIM\.thumbnails\.thumbdata3-1763508120
+  [OTRO] 174.5 MB  C:\hOY\ISABEL\DCIM\.thumbnails\.thumbdata3--1967290299
+  [OTRO] 174.5 MB  C:\Users\GLADIS\Desktop\ISABEL\DCIM\.thumbnails\.thumbdata3--1967290299
+  [OTRO] 171.5 MB  C:\ProgramData\Adobe\Setup\{AC76BA86-7AD7-1034-7B44-AC0F074E4100}\Data.cab
+  [OTRO] 70.7 MB  ~25 archivos  C:\Windows\System32\NlsData.dll
+  [OTRO] 70.7 MB  ~25 archivos  C:\Windows\winsxs\x86_microsoft-windows-naturallanguage6_31bf3856ad364e35_6.1.7601.17514_none_9fe23e2588fdee38\NlsData.dll
+  [OTRO] 42.5 MB  ~2 archivos  P:\BROTHER\mflpro\Data\Disk1\data.cab
+  [OTRO] 36.0 MB  C:\ProgramData\BlueStacks\BackupData\Data.vdi.backup
+  [OTRO] 32.0 MB  C:\Users\GLADIS\AppData\Local\Google\Chrome\User Data\Default\Cache\Cache_Data\data_3
+  [OTRO] 22.0 MB  C:\Users\Almacen\AppData\Local\Google\Chrome\User Data\Default\Cache\Cache_Data\data_2
+  [OTRO] 19.6 MB  C:\Program Files\Microsoft Office\Office14\OART.DLL
+  [OTRO] 19.2 MB  C:\Windows\System32\wbem\repository\OBJECTS.DATA
+  [OTRO] 17.3 MB  ~4 archivos  C:\Windows\Help\Windows\es-ES\artui.h1s
+  [OTRO] 15.9 MB  C:\Users\Almacen\AppData\Local\Google\Chrome\User Data\Default\Cache\Cache_Data\data_1
+  [OTRO] 13.0 MB  C:\Windows\assembly\NativeImages_v4.0.30319_32\System.Data.Entity\4ab6618af01027921e5254116aa502c4\System.Data.Entity.ni.dll
+  [OTRO] 12.0 MB  C:\Users\GLADIS\AppData\Local\Google\Chrome\User Data\Default\GPUCache\data_3
+  [OTRO] 12.0 MB  C:\Users\GLADIS\AppData\Local\Google\Chrome\User Data\GrShaderCache\GPUCache\data_3
+  [OTRO] 11.7 MB  C:\Users\GLADIS\AppData\Local\Microsoft\Media Player\CurrentDatabase.wmdb
+  [OTRO] 10.6 MB  C:\Program Files\Microsoft Office\Office14\OARTCONV.DLL
+  [OTRO] 10.1 MB  C:\Windows\winsxs\x86_microsoft-windows-help-artui.resources_31bf3856ad364e35_6.1.7600.16385_es-es_4a7504468e0bc9fe\artui.h1s
+  [OTRO] 9.9 MB  C:\Users\GLADIS\Music\MUSICA\Pa' Olvidarte - Zion & Lennox Ft. Farruko & MTZ.mp3
+  [OTRO] 9.9 MB  C:\Users\GLADIS\VARIOS\Pa' Olvidarte - Zion & Lennox Ft. Farruko & MTZ.mp3
+  [OTRO] 9.8 MB  C:\Windows\System32\NlsData000a.dll
+  [OTRO] 9.8 MB  C:\Windows\winsxs\x86_microsoft-windows-naturallanguage6_31bf3856ad364e35_6.1.7601.17514_none_9fe23e2588fdee38\NlsData000a.dll
+  [OTRO] 9.5 MB  C:\Windows\assembly\NativeImages_v2.0.50727_32\System.Data.Entity\e8ca5ab496422833c4995ed6bb73b9d4\System.Data.Entity.ni.dll
+  [OTRO] 9.2 MB  C:\Users\GLADIS\VARIOS\Millonario - Romeo Santos Ft. Elvis Martinez.mp3
+  [OTRO] 9.2 MB  C:\Users\GLADIS\Music\MUSICA\Mujeres Remix - Mozart La Para Ft. Justin Quiles, Farruko, Jowell & Randy.mp3
+  [OTRO] 9.2 MB  C:\Users\GLADIS\VARIOS\Mujeres Remix - Mozart La Para Ft. Justin Quiles, Farruko, Jowell & Randy.mp3
+  [OTRO] 9.1 MB  C:\Users\GLADIS\Music\MUSICA\Adrenalina - Wisin Ft. Jennifer López & Ricky Martin.mp3
+  [OTRO] 9.1 MB  C:\Users\GLADIS\VARIOS\Adrenalina - Wisin Ft. Jennifer López & Ricky Martin.mp3
+  [OTRO] 9.0 MB  C:\Users\GLADIS\Music\MUSICA\No Quiero Amarte - Justin Quiles Ft. Zion & Lennox.mp3
+  [OTRO] 9.0 MB  C:\Users\GLADIS\VARIOS\No Quiero Amarte - Justin Quiles Ft. Zion & Lennox.mp3
+  [OTRO] 8.7 MB  C:\Program Files\DVD Maker\OmdBase.dll
+  [OTRO] 8.7 MB  C:\Windows\winsxs\x86_microsoft-windows-opticalmediadisc-api_31bf3856ad364e35_6.1.7601.17514_none_b7f4a39556101571\OmdBase.dll
+  [OTRO] 8.6 MB  C:\Users\GLADIS\Music\MUSICA\Party Rock Anthem - Lmfao Ft. Lauren Bennett & GoonRock.mp3
+  [OTRO] 8.6 MB  C:\Users\GLADIS\VARIOS\Party Rock Anthem - Lmfao Ft. Lauren Bennett & GoonRock.mp3
+  [OTRO] 8.6 MB  C:\Users\GLADIS\VARIOS\Ritmo De San Martín - La Banda Show.mp3
+  [OTRO] 8.4 MB  C:\Users\GLADIS\Music\MUSICA\Déjame Acompañarte - Omar Enrique Ft. Elvis Crespo.mp3
+  [OTRO] 8.4 MB  C:\Users\GLADIS\VARIOS\Déjame Acompañarte - Omar Enrique Ft. Elvis Crespo.mp3
+  [OTRO] 8.0 MB  C:\Users\Almacen\AppData\Local\Google\Chrome\User Data\Profile 1\Cache\Cache_Data\data_3
+  [OTRO] 7.9 MB  C:\Users\GLADIS\Music\MUSICA\Darte Un Beso - Prince Royce.mp3
+  [OTRO] 7.9 MB  C:\Users\GLADIS\VARIOS\Darte Un Beso - Prince Royce.mp3
+  [OTRO] 7.9 MB  C:\Users\GLADIS\Music\MUSICA\Rompe Corazones - Ozuna Ft. Daddy Yankee.mp3
+  [OTRO] 7.9 MB  C:\Users\GLADIS\VARIOS\Rompe Corazones - Ozuna Ft. Daddy Yankee.mp3
+  [OTRO] 7.4 MB  C:\Windows\assembly\NativeImages_v4.0.30319_32\System.Data\9b88ea7b312bcfe8fc18071e61d3bc2b\System.Data.ni.dll
+  [OTRO] 7.2 MB  C:\Users\GLADIS\Music\MUSICA\Mujeres - Mozart La Para Ft. Justin Quiles.mp3
+  [OTRO] 7.2 MB  C:\Users\GLADIS\VARIOS\Mujeres - Mozart La Para Ft. Justin Quiles.mp3
+  [OTRO] 7.1 MB  C:\Program Files\Microsoft Office\Office14\NL7Data.DLL
+  [OTRO] 6.7 MB  C:\Users\GLADIS\Music\MUSICA\No Pude Quitarte Las Espinas - La Decision Vallenata.mp3
+  [OTRO] 6.7 MB  C:\Users\GLADIS\VARIOS\No Pude Quitarte Las Espinas - La Decision Vallenata.mp3
+  [OTRO] 6.6 MB  C:\Users\GLADIS\Music\MUSICA\La Ventanita - Sergio Vargas.mp3
+  [OTRO] 6.6 MB  C:\Users\GLADIS\VARIOS\La Ventanita - Sergio Vargas.mp3
+  [OTRO] 6.5 MB  C:\Users\GLADIS\Music\MUSICA\Labios Compartidos - Maná.mp3
+  [OTRO] 6.5 MB  C:\Users\GLADIS\VARIOS\Labios Compartidos - Maná.mp3
+  [OTRO] 6.5 MB  C:\Users\GLADIS\Music\MUSICA\He Decidido Olvidarte - Pedro Arroyo.mp3
+  [OTRO] 6.5 MB  C:\Users\GLADIS\VARIOS\He Decidido Olvidarte - Pedro Arroyo.mp3
+  [OTRO] 6.4 MB  C:\Users\GLADIS\Music\MUSICA\El Terremoto - Martin Elias.mp3
+  [OTRO] 6.4 MB  C:\Users\GLADIS\VARIOS\El Terremoto - Martin Elias.mp3
+  [OTRO] 6.3 MB  C:\Windows\assembly\NativeImages_v2.0.50727_32\System.Data\4b335bfaa07fc54f2d72213d33f53e97\System.Data.ni.dll
+  [OTRO] 6.3 MB  C:\Program Files\InstallShield Installation Information\{004B8D14-7E3A-490A-ABB3-753535E169E3}\data.cab
+  [OTRO] 6.2 MB  C:\Users\GLADIS\Music\MUSICA\Ella Quiere Cuarto - Joswa In Da House.mp3
+  [OTRO] 6.2 MB  C:\Users\GLADIS\VARIOS\Ella Quiere Cuarto - Joswa In Da House.mp3
+  [OTRO] 6.1 MB  C:\Users\GLADIS\Music\MUSICA\Ni Siquiera Dejaste - Antonio Cartagena.mp3
+  [OTRO] 6.1 MB  C:\Users\GLADIS\VARIOS\Ni Siquiera Dejaste - Antonio Cartagena.mp3
+  [OTRO] 6.0 MB  C:\Users\GLADIS\VARIOS\Ponte Cómo El Conejito - Yustin NR Ft. R15 El Mandatario.mp3
+  [OTRO] 5.7 MB  C:\Users\GLADIS\Music\MUSICA\Party Animal Remix - Charly Black Ft. Daddy Yankee, Maluma, Farruko, El Boy C.mp3
+  [OTRO] 5.7 MB  C:\Users\GLADIS\VARIOS\Party Animal Remix - Charly Black Ft. Daddy Yankee, Maluma, Farruko, El Boy C.mp3
+  [OTRO] 5.6 MB  C:\Users\GLADIS\VARIOS\La Cartera - Farruko Ft. Bad Bunny.mp3
+  [OTRO] 5.5 MB  C:\Users\GLADIS\Music\MUSICA\Wanna Be Startin' Something - Michael Jackson.mp3
+  [OTRO] 5.5 MB  C:\Users\GLADIS\VARIOS\Wanna Be Startin' Something - Michael Jackson.mp3
+  [OTRO] 5.5 MB  C:\Users\GLADIS\Music\MUSICA\All Stars - Martin Solveig Ft. ALMA.mp3
+  [OTRO] 5.5 MB  C:\Users\GLADIS\VARIOS\All Stars - Martin Solveig Ft. ALMA.mp3
+  [OTRO] 5.4 MB  C:\Users\GLADIS\Music\MUSICA\Weke Weke - Buraka Som Sistema.mp3
+  [OTRO] 5.4 MB  C:\Users\GLADIS\VARIOS\Weke Weke - Buraka Som Sistema.mp3
+  [OTRO] 5.1 MB  C:\Users\GLADIS\VARIOS\We like to Party - Vengaboys.mp3
+  [OTRO] 5.1 MB  C:\Desktop old\GLADIS\Desktop\GLADYS\downloads\Bonnie Tyler - Total Eclipse of the Heart.mp3
+  [OTRO] 5.1 MB  C:\hOY\GLADYS\downloads\Bonnie Tyler - Total Eclipse of the Heart.mp3
+  [OTRO] 5.1 MB  C:\Users\GLADIS\Desktop\GLADYS\downloads\Bonnie Tyler - Total Eclipse of the Heart.mp3
+  [OTRO] 5.1 MB  C:\Users\GLADIS\Music\MUSICA\Total Eclipse Of The Heart - Bonnie Tyler.mp3
+  [OTRO] 5.1 MB  C:\Users\GLADIS\VARIOS\Total Eclipse Of The Heart - Bonnie Tyler.mp3
+  [OTRO] 5.0 MB  C:\Users\GLADIS\Music\MUSICA\There For You - Martin Garrix Ft. Troye Sivan.mp3
+  [OTRO] 5.0 MB  C:\Users\GLADIS\VARIOS\There For You - Martin Garrix Ft. Troye Sivan.mp3
+  [OTRO] 5.0 MB  C:\Users\GLADIS\VARIOS\Good Things Fall Apart - ILLENIUM Ft. Jon Bellion.mp3
+  [OTRO] 5.0 MB  C:\Users\GLADIS\VARIOS\Ojalá - Sech Ft. Mozart La Para & Farina.mp3
+  [OTRO] 4.9 MB  C:\Users\GLADIS\Music\MUSICA\A Partir De Hoy - David Bisbal Ft. Sebástian Yatra.mp3
+  [OTRO] 4.9 MB  C:\Users\GLADIS\VARIOS\A Partir De Hoy - David Bisbal Ft. Sebástian Yatra.mp3
+  [OTRO] 4.8 MB  C:\Users\GLADIS\Music\MUSICA\Can You Hear The Night - Muttonheads Ft. Eden Martin.mp3
+  [OTRO] 4.8 MB  C:\Users\GLADIS\VARIOS\Can You Hear The Night - Muttonheads Ft. Eden Martin.mp3
+  [OTRO] 4.6 MB  C:\Users\GLADIS\Music\MUSICA\Mi Última Carta - Prince Royce.mp3
+  [OTRO] 4.6 MB  C:\Users\GLADIS\VARIOS\Mi Última Carta - Prince Royce.mp3
+  [OTRO] 4.6 MB  C:\Users\GLADIS\Music\MUSICA\Wizard - Martin Garrix Ft. Jay Hardway.mp3
+  [OTRO] 4.6 MB  C:\Users\GLADIS\VARIOS\Wizard - Martin Garrix Ft. Jay Hardway.mp3
+  [OTRO] 4.6 MB  C:\Users\GLADIS\Music\MUSICA\Party - Chris Brown Ft. Gucci Mane & Usher.mp3
+  [OTRO] 4.6 MB  C:\Users\GLADIS\VARIOS\Party - Chris Brown Ft. Gucci Mane & Usher.mp3
+  [OTRO] 4.6 MB  C:\Desktop old\GLADIS\Desktop\GLADYS\downloads\Bonny Cepeda - Cuarto De Hotel.mp3
+  [OTRO] 4.6 MB  C:\hOY\GLADYS\downloads\Bonny Cepeda - Cuarto De Hotel.mp3
+  [OTRO] 4.6 MB  C:\Users\GLADIS\Desktop\GLADYS\downloads\Bonny Cepeda - Cuarto De Hotel.mp3
+  [OTRO] 4.6 MB  C:\Users\GLADIS\Music\MUSICA\Cuarto De Hotel - Bonny Cepeda.mp3
+  [OTRO] 4.6 MB  C:\Users\GLADIS\VARIOS\Cuarto De Hotel - Bonny Cepeda.mp3
+  [OTRO] 4.5 MB  C:\Users\GLADIS\Music\MUSICA\So Far Away - Martin Garrix, David Guetta Ft. Jamie Scott & Romy Dya.mp3
+  [OTRO] 4.5 MB  C:\Users\GLADIS\VARIOS\So Far Away - Martin Garrix, David Guetta Ft. Jamie Scott & Romy Dya.mp3
+  [OTRO] 4.5 MB  C:\Users\GLADIS\Music\MUSICA\Robarte Un Beso - Carlos Vives Ft. Sebastian Yatra.mp3
+  [OTRO] 4.5 MB  C:\Users\GLADIS\VARIOS\Robarte Un Beso - Carlos Vives Ft. Sebastian Yatra.mp3
+  [OTRO] 4.5 MB  C:\Users\GLADIS\Downloads\GridArt_20221102_102253308 (1).jpg
+  [OTRO] 4.5 MB  C:\Users\GLADIS\Downloads\GridArt_20221102.jpg
+  [DAT] 4.5 MB  C:\ProgramData\Microsoft\RAC\StateData\RacWmiEventData.dat
+  [OTRO] 4.5 MB  C:\Users\Almacen\AppData\Local\Google\Chrome\User Data\Profile 1\Web Data
+  [OTRO] 4.4 MB  C:\hOY\GLADYS\downloads\Diomedes Diaz   Amarte Más No Puedo Letra.mp3
+  [OTRO] 4.4 MB  C:\Users\GLADIS\Desktop\GLADYS\downloads\Diomedes Diaz   Amarte Más No Puedo Letra.mp3
+  [OTRO] 4.4 MB  C:\Users\GLADIS\Music\MUSICA\Amarte Más No Puedo - Diomedes Díaz.mp3
+  [OTRO] 4.4 MB  C:\Users\GLADIS\VARIOS\Amarte Más No Puedo - Diomedes Díaz.mp3
+  [OTRO] 4.3 MB  C:\Windows\System32\NlsData001d.dll
+  [OTRO] 4.3 MB  C:\Windows\winsxs\x86_microsoft-windows-naturallanguage6_31bf3856ad364e35_6.1.7601.17514_none_9fe23e2588fdee38\NlsData001d.dll
+  [OTRO] 4.3 MB  C:\Users\GLADIS\Music\MUSICA\Levántate - Mozart La Para.mp3
+  [OTRO] 4.3 MB  C:\Users\GLADIS\VARIOS\Levántate - Mozart La Para.mp3
+  [OTRO] 4.3 MB  C:\Windows\assembly\NativeImages_v4.0.30319_32\System.Wind0de890be#\23fec72a12f8de4a40a28c6c75428000\System.Windows.Forms.DataVisualization.ni.dll
+
+=== POSIBLES BASES DE DATOS / ARCHIVOS GRANDES ===
+  [ZIP] 1.40 GB  C:\RESPAMIX\MIX11 (servidor).rar
+  [OTRO] 1.11 GB  C:\Users\GLADIS\Documents\GARANT.rtf
+  [OTRO] 768.1 MB  C:\Windows\SoftwareDistribution\DataStore\DataStore.edb
+  [OTRO] 717.8 MB  C:\Windows\Installer\4093da.msp
+  [OTRO] 679.7 MB  C:\ProgramData\Adobe\ARM\Reader_26.001.21563\AcroRdrDCUpd2600121529.msp
+  [OTRO] 675.2 MB  C:\Windows\Installer\200224.msp
+  [OTRO] 675.2 MB  C:\Windows\Installer\d297f8.msp
+  [OTRO] 555.0 MB  C:\ProgramData\BlueStacks\Android\Root.vdi
+  [OTRO] 548.0 MB  C:\ProgramData\BlueStacks\Android\Data.vdi
+  [ZIP] 521.7 MB  P:\YETZELIA\USB\MIX AL 02122016\MIX11.rar
+  [OTRO] 409.8 MB  C:\Windows\Installer\e3b6e8.msp
+  [OTRO] 395.2 MB  C:\Windows\Installer\f6188a.msp
+  [OTRO] 385.9 MB  C:\Windows\Installer\1e2a9d.msp
+  [OTRO] 368.0 MB  C:\Windows\Installer\db955.msp
+  [OTRO] 365.3 MB  C:\Windows\Installer\1cc6db.msp
+  [OTRO] 332.4 MB  C:\Windows\Installer\151308.msp
+  [OTRO] 328.6 MB  C:\Windows\Installer\1c5edb.msp
+  [OTRO] 323.7 MB  C:\Windows\Installer\f32e40.msp
+  [OTRO] 314.0 MB  C:\ProgramData\BlueStacks\Android\Prebundled.vdi
+  [OTRO] 312.4 MB  C:\Windows\Installer\e2e22d.msp
+  [EXCEL] 303.2 MB  P:\YETZELIA\USB\Libros\Banco Plaza (2).xlsx
+  [DAT] 281.0 MB  C:\Desktop old\GLADIS\Desktop\GLADYS\BlackBerry\system\media\thumbs129x129.dat
+  [DAT] 281.0 MB  C:\hOY\GLADYS\BlackBerry\system\media\thumbs129x129.dat
+  [DAT] 281.0 MB  C:\Users\GLADIS\Desktop\GLADYS\BlackBerry\system\media\thumbs129x129.dat
+  [ZIP] 269.1 MB  C:\Program Files\Google\Chrome\Application\109.0.5414.120\Installer\chrome.7z
+  [OTRO] 247.9 MB  C:\Windows\Installer\ec49f8.msp
+  [OTRO] 231.6 MB  C:\Windows\Installer\3341e3.msp
+  [OTRO] 231.6 MB  C:\Windows\Installer\457a20.msp
+  [OTRO] 220.0 MB  C:\Users\Almacen\AppData\Local\Google\Chrome\User Data\Default\Cache\Cache_Data\data_3
+  [OTRO] 218.2 MB  C:\Windows\Installer\1a6700e.msp
+  [WORD] 200.9 MB  C:\Users\GLADIS\Documents\garan587.doc
+  [EXCEL] 195.2 MB  P:\YETZELIA\USB\Libros\Banco Exterior (2).xlsx
+  [OTRO] 185.5 MB  C:\Windows\Installer\1316f37.msp
+  [OTRO] 174.5 MB  C:\hOY\ISABEL\DCIM\.thumbnails\.thumbdata3-1763508120
+  [OTRO] 174.5 MB  C:\Users\GLADIS\Desktop\ISABEL\DCIM\.thumbnails\.thumbdata3-1763508120
+  [OTRO] 174.5 MB  C:\hOY\ISABEL\DCIM\.thumbnails\.thumbdata3--1967290299
+  [OTRO] 174.5 MB  C:\Users\GLADIS\Desktop\ISABEL\DCIM\.thumbnails\.thumbdata3--1967290299
+  [OTRO] 173.1 MB  C:\Program Files\Google\Chrome\Application\109.0.5414.120\chrome.dll
+  [DAT] 172.1 MB  C:\Desktop old\GLADIS\Desktop\GLADYS\BlackBerry\system\media\thumbs800x800.dat
+  [DAT] 172.1 MB  C:\hOY\GLADYS\BlackBerry\system\media\thumbs800x800.dat
+  [DAT] 172.1 MB  C:\Users\GLADIS\Desktop\GLADYS\BlackBerry\system\media\thumbs800x800.dat
+  [OTRO] 171.5 MB  C:\ProgramData\Adobe\Setup\{AC76BA86-7AD7-1034-7B44-AC0F074E4100}\Data1.cab
+  [OTRO] 163.1 MB  C:\RESPAMIX\MIX11 (servidor)\servidor\setup_av_srvfile.exe
+  [OTRO] 163.1 MB  M:\servidor\setup_av_srvfile.exe
+  [OTRO] 163.1 MB  P:\SERVIDOR\setup_av_srvfile.exe
+  [OTRO] 153.4 MB  C:\ProgramData\Adobe\ARM\Reader_22.003.20282\AcroRdrDCUpd2200320310_incr.msp
+  [OTRO] 152.6 MB  C:\Windows\Installer\be3a8.msp
+  [OTRO] 147.7 MB  C:\Users\GLADIS\Documents\collage reten.rtf
+  [OTRO] 144.8 MB  C:\Program Files\Adobe\Acrobat Reader DC\Reader\AcroCEF\libcef.dll
+  [OTRO] 144.4 MB  C:\Windows\Microsoft.NET\Framework\v4.0.30319\SetupCache\v4.6.00081\NetFx_Full.mzz
+  [OTRO] 143.1 MB  C:\Windows\Installer\1b226b.msp
+  [OTRO] 137.4 MB  C:\Otros\MSERT (1).exe
+  [OTRO] 137.4 MB  C:\RESPAMIX\MIX11 (servidor)\servidor\MSERT (1).exe
+  [OTRO] 137.4 MB  M:\servidor\MSERT (1).exe
+  [OTRO] 137.4 MB  P:\SERVIDOR\MSERT (1).exe
+  [OTRO] 134.6 MB  C:\Otros\MSERT.exe
+  [OTRO] 134.6 MB  C:\RESPAMIX\MIX11 (servidor)\servidor\MSERT.exe
+  [OTRO] 134.6 MB  M:\servidor\MSERT.exe
+  [OTRO] 134.6 MB  P:\SERVIDOR\MSERT.exe
+  [OTRO] 134.0 MB  P:\UTILIDADES\Defender Act\mpam-fe.exe
+  [OTRO] 128.1 MB  C:\ProgramData\Adobe\ARM\Reader_22.003.20282\AcroRdrDCUpd2200320310_incr.msi
+  [OTRO] 125.7 MB  P:\DRIVERS\hp m203DW\LJM203-M206_UWWL_UWWL_Full_WebPack_44.5.2693.exe
+  [OTRO] 124.7 MB  C:\Users\GLADIS\Music\MUSICA\Vallenatos Románticos - Mix.mp3
+  [OTRO] 124.7 MB  C:\Users\GLADIS\VARIOS\Vallenatos Románticos - Mix.mp3
+  [EXCEL] 123.7 MB  P:\YETZELIA\USB\Libros\Banco Mercantil 2018.xlsx
+  [OTRO] 117.7 MB  C:\Users\GLADIS\AppData\Local\Adobe\ARM\Reader_24.002.20895\AcroRdrDCUpd2500120997.msi
+  [OTRO] 117.7 MB  C:\Users\GLADIS\AppData\Local\Microsoft\Windows\Temporary Internet Files\Content.IE5\KUCEUSIV\AcroRdrDCUpd2500120997[1].msi
+  [OTRO] 114.3 MB  C:\Windows\Installer\1156ee2.msp
+  [OTRO] 113.8 MB  C:\Windows\Installer\c5d537.msp
+  [OTRO] 113.5 MB  C:\Windows\Installer\11a9091.msp
+  [OTRO] 112.0 MB  C:\Program Files\Mozilla Firefox\updated\xul.dll
+  [OTRO] 111.9 MB  C:\Program Files\Mozilla Firefox\xul.dll
+  [OTRO] 108.5 MB  C:\Windows\System32\MRT.exe
+  [OTRO] 107.0 MB  C:\Windows\Installer\a1f21f5.msp
+  [OTRO] 102.1 MB  C:\Windows\Installer\1050de.msp
+  [OTRO] 100.3 MB  C:\Windows\Installer\1937830.msp
+  [OTRO] 98.8 MB  C:\Windows\Installer\e89b60.msp
+  [OTRO] 98.6 MB  C:\Windows\Installer\bfd82a.msp
+  [OTRO] 92.6 MB  C:\Users\GLADIS\VARIOS\Mix - Vallenatos Deseo.mp3
+  [OTRO] 90.7 MB  C:\Users\GLADIS\Music\MUSICA\Mix - Romeo Santos.mp3
+  [OTRO] 90.7 MB  C:\Users\GLADIS\VARIOS\Mix - Romeo Santos.mp3
+  [EXCEL] 89.5 MB  P:\YETZELIA\USB\Libros\Banco Fondo Común 7088.xlsx
+  [OTRO] 89.0 MB  C:\Users\GLADIS\AppData\Local\Microsoft\Windows\Temporary Internet Files\Content.IE5\2DTF47B8\AcroRdrDCUpd2400220687_incr[1].msi
+  [EXCEL] 89.0 MB  P:\YETZELIA\USB\Libros\Banco de Venezuela (2).xlsx
+  [EXCEL] 88.3 MB  P:\YETZELIA\USB\Libros\Banco Mercantil - Ene - Junio 2019.xlsx
+  [OTRO] 88.2 MB  C:\ProgramData\Adobe\Setup\{AC76BA86-7AD7-1034-7B44-AC0F074E4100}\AcroRdrDCUpd1700920044.msp
+  [OTRO] 88.2 MB  C:\Windows\Installer\cd23a3.msp
+  [OTRO] 88.2 MB  C:\Users\GLADIS\Music\MUSICA\Gaitas Eternas.mp3
+  [OTRO] 88.2 MB  C:\Users\GLADIS\VARIOS\Gaitas Eternas.mp3
+  [OTRO] 87.5 MB  C:\Windows\Installer\d33263.msp
+  [OTRO] 87.4 MB  C:\Windows\Installer\5a2092.msp
+  [OTRO] 85.4 MB  C:\Windows\Installer\28eb64.msp
+  [OTRO] 74.5 MB  C:\Users\GLADIS\AppData\Local\Temp\7zS0ED0\NS100x86.cab
+  [OTRO] 74.5 MB  P:\DRIVERS\HP NEVERSTOP 1000N\Basic_Webpack_x86-49.10.4644-NSL1000_UW_Basicx86_Webpack\NS100x86.cab
+  [OTRO] 72.1 MB  C:\Users\GLADIS\Music\MUSICA\Mix - Merengue.mp3
+  [OTRO] 72.1 MB  C:\Users\GLADIS\VARIOS\Mix - Merengue.mp3
+  [EXCEL] 71.0 MB  P:\YETZELIA\USB\Libros\Banco Plaza.xlsx
+  [OTRO] 69.2 MB  C:\Program Files\Common Files\microsoft shared\OFFICE14\MSORES.DLL
+  [OTRO] 67.9 MB  C:\Users\GLADIS\Music\MUSICA\Vallenatos - Mix.mp3
+  [OTRO] 67.9 MB  C:\Users\GLADIS\VARIOS\Vallenatos - Mix.mp3
+  [OTRO] 67.6 MB  C:\Windows\Installer\9e0a0d.msp
+  [OTRO] 67.3 MB  C:\Windows\Installer\d01f4d.msp
+  [OTRO] 66.8 MB  C:\Windows\Installer\100e0d.msp
+  [OTRO] 66.3 MB  C:\Windows\Installer\14ffc0.msp
+  [OTRO] 66.1 MB  C:\Users\GLADIS\Music\MUSICA\Mix - Pastor López.mp3
+  [OTRO] 66.1 MB  C:\Users\GLADIS\VARIOS\Mix - Pastor López.mp3
+  [OTRO] 65.5 MB  C:\Windows\Installer\e10114.msp
+  [OTRO] 64.3 MB  C:\Users\GLADIS\Music\MUSICA\Tecno Merengue - Seven La Destructora.mp3
+  [OTRO] 64.3 MB  C:\Users\GLADIS\VARIOS\Tecno Merengue - Seven La Destructora.mp3
+  [OTRO] 63.9 MB  C:\Windows\IME\IMESC5\DICTS\PINTLGT.IMD
+  [OTRO] 63.9 MB  C:\Windows\winsxs\x86_microsoft-windows-i..e-trigramdictionary_31bf3856ad364e35_6.1.7600.16385_none_b6b8175fa02129dc\PINTLGT.IMD
+  [DBF] 63.5 MB  M:\comp01\MXTRACOB.DBF
+  [DBF] 61.6 MB  M:\COMP01d\MXTRACOB.DBF
+  [OTRO] 61.3 MB  C:\Users\GLADIS\VARIOS\Vallenatos - Seven La Destructora.mp3
+  [OTRO] 61.1 MB  C:\Users\GLADIS\Documents\~ARANT.tmp
+  [DBF] 60.9 MB  M:\COMP03\MXTRACOB.DBF
+  [OTRO] 59.6 MB  C:\ProgramData\Mozilla-1de4eec8-1241-4177-a864-e594e8d1fb38\updates\308046B0AF4A39CB\updates\0\update.mar
+  [OTRO] 59.5 MB  C:\Windows\Installer\d35bbb.msp
+  [OTRO] 59.0 MB  C:\RESPAMIX\MIX11 (servidor)\servidor\DRIVERS\ETHERNET\tb1etn04sr17.exe
+  [OTRO] 59.0 MB  M:\servidor\DRIVERS\ETHERNET\tb1etn04sr17.exe
+  [OTRO] 59.0 MB  P:\SERVIDOR\DRIVERS\ETHERNET\tb1etn04sr17.exe
+  [OTRO] 58.8 MB  C:\Windows\Installer\125b6a.msp
+  [DBF] 58.1 MB  C:\RESPAMIX\COMP01-10012023\MXTRACOB.DBF
+  [DBF] 58.0 MB  C:\RESPAMIX\COMP01-15122022\MXTRACOB.DBF
+  [DBF] 57.9 MB  C:\RESPAMIX\comp0101122022\MXTRACOB.DBF
+  [OTRO] 57.8 MB  C:\Windows\SoftwareDistribution\Download\e86d16b171c96e52621fc91dc3736a2128ed88ad
+  [OTRO] 57.6 MB  C:\Windows\Installer\ac32c.msp
+  [PDF] 57.4 MB  C:\Users\GLADIS\Documents\Libro alpha 1.pdf
+  [OTRO] 57.4 MB  C:\Users\Almacen\AppData\Local\Microsoft\Windows\Temporary Internet Files\Content.IE5\ZMLACE2U\AcroRdrDCUpd2600121563_incr[1].msi
+  [DBF] 57.3 MB  M:\COMP02\MXTRACOB.DBF
+  [OTRO] 56.6 MB  C:\Windows\Installer\bde8dd.msp
+  [OTRO] 56.6 MB  C:\Users\GLADIS\Music\MUSICA\Bass Boosted Music.mp3
+  [OTRO] 56.6 MB  C:\Users\GLADIS\VARIOS\Bass Boosted Music.mp3
+  [OTRO] 55.9 MB  C:\Windows\Installer\d7ce2.msp
+  [DBF] 55.2 MB  C:\RESPAMIX\comp0125042022\MXTRACOB.DBF
+  [DBF] 55.2 MB  C:\RESPAMIX\MIX11 (servidor)\comp01\MXTRACOB.DBF
+  [DBF] 55.2 MB  C:\RESPAMIX\MIX11 (servidor)\COMP02\MXTRACOB.DBF
+  [OTRO] 55.1 MB  C:\Windows\Installer\b5de9.msp
+  [OTRO] 55.1 MB  C:\Users\Almacen\AppData\Local\Microsoft\Windows\Temporary Internet Files\Content.IE5\7UP1C81U\AcroRdrDCUpd2600121411_incr[1].msi
+  [DBF] 54.8 MB  C:\RESPAMIX\MIX11 (servidor)\comp01-29032022\MXTRACOB.DBF
+  [DBF] 54.8 MB  P:\Elias\MIX\MIX11\comp01\MXTRACOB.DBF
+  [OTRO] 54.2 MB  C:\Windows\Installer\e6efa0.msp
+  [EXCEL] 54.1 MB  P:\YETZELIA\USB\Libros\Banco Exterior.xlsx
+  [OTRO] 53.7 MB  C:\Users\Almacen\AppData\Local\Microsoft\Windows\WER\ReportQueue\Critical_iexplore.exe_7b76ff0f5e72ff493afd74419d38469ae5d59a4_cab_14729c23\WERE3F0.tmp.hdmp
+  [OTRO] 53.7 MB  C:\Windows\Installer\e3e2aa.msp
+  [OTRO] 53.6 MB  C:\Users\GLADIS\Music\MUSICA\La Hora Loca - Mix.mp3
+  [OTRO] 53.6 MB  C:\Users\GLADIS\VARIOS\La Hora Loca - Mix.mp3
+  [OTRO] 53.4 MB  C:\Windows\Installer\1f35d9.msp
+  [EXCEL] 53.0 MB  P:\YETZELIA\USB\Libros\Banco de Venezuela.xlsx
+  [EXCEL] 52.9 MB  P:\YETZELIA\USB\Libros\Banco Fondo Común 8179 (2).xlsx
+  [EXCEL] 52.9 MB  P:\YETZELIA\USB\Libros\Banco Fondo Común 8179.xlsx
+  [OTRO] 52.4 MB  C:\Windows\SoftwareDistribution\Download\0350e593835125031f36e846ff3b936c09b8d479
+  [OTRO] 52.1 MB  C:\Users\GLADIS\Documents\Documento.rtf
+  [OTRO] 48.7 MB  C:\Users\GLADIS\AppData\Local\Mozilla\Firefox\Profiles\ncjzflca.default\cache2\entries\8B3141FB121A163C13841D5588DA261C23BE1A34
+  [OTRO] 48.5 MB  C:\Windows\Installer\2a71cd.msp
+  [DBF] 48.2 MB  C:\RESPAMIX\MIX11 (servidor)\comp01w\MXTRACOB.DBF
+  [OTRO] 48.1 MB  C:\Program Files\Adobe\Acrobat Reader DC\Reader\AcroRd32.dll
+  [OTRO] 48.1 MB  C:\Windows\Installer\af625d.msp
+  [DBF] 48.1 MB  C:\RESPAMIX\MIX11 (servidor)\comp01-ORIGINAL\MXTRACOB.DBF
+  [DBF] 48.1 MB  M:\comp01-ORIGINAL\MXTRACOB.DBF
+  [DBF] 48.1 MB  C:\RESPAMIX\MIX11 (servidor)\comp01 2019-12-02 17;30;49 (Completo)\MXTRACOB.DBF
+  [DBF] 48.1 MB  P:\Elias\MIX\MIX11\comp01 2019-12-02 17;30;49 (Completo)\MXTRACOB.DBF
+  [DBF] 47.7 MB  C:\RESPAMIX\MIX11 (servidor)\comp01z\MXTRACOB.DBF
+  [OTRO] 47.6 MB  C:\Program Files\nodejs\node.exe
+  [DBF] 46.5 MB  C:\RESPAMIX\MIX11 (servidor)\COMP01C\MXTRACOB.DBF
+  [OTRO] 46.0 MB  C:\Users\GLADIS\Music\MUSICA\Tambor - Mix.mp3
+  [OTRO] 46.0 MB  C:\Users\GLADIS\VARIOS\Tambor - Mix.mp3
+  [EXCEL] 45.9 MB  P:\YETZELIA\USB\Libros\Banco Fondo Común 7088 2018.xlsx
+  [OTRO] 45.3 MB  C:\ProgramData\Adobe\ARM\Reader_10.0.0\AdbeRdr1010_es_ES.msi
+  [DBF] 45.0 MB  C:\RESPAMIX\MIX11 (servidor)\Comp01b\MXTRACOB.DBF
+  [ZIP] 44.0 MB  P:\UTILIDADES\kms\KMSAUTONET_setup.rar
+  [OTRO] 43.6 MB  P:\BROTHER\DCP-8080DN-inst-win7-A2.EXE
+  [OTRO] 43.5 MB  P:\PRUEBA\Antivirus Microsoft\windows6.0-kb4474419-v4-x64_09cb148f6ef10779d7352b7269d66a7f23019207.msu
+  [OTRO] 42.6 MB  C:\Program Files\Java\jre6\lib\rt.jar
+  [OTRO] 42.5 MB  C:\Program Files\Mozilla Firefox\updated\browser\omni.ja
+  [OTRO] 42.2 MB  C:\Program Files\Mozilla Firefox\browser\omni.ja
+  [OTRO] 42.0 MB  C:\Users\GLADIS\Music\MUSICA\Mix - Proyecto Uno, Sandy & Papo & Los Ilegales.mp3
+  [OTRO] 42.0 MB  C:\Users\GLADIS\VARIOS\Mix - Proyecto Uno, Sandy & Papo & Los Ilegales.mp3
+  [DBF] 42.0 MB  P:\YETZELIA\USB\COMP01\MXTRACOB.DBF
+  [OTRO] 41.2 MB  C:\Users\GLADIS\Music\MUSICA\Mix - Merengue 2.mp3
+  [OTRO] 41.2 MB  C:\Users\GLADIS\VARIOS\Mix - Merengue 2.mp3
+  [OTRO] 40.4 MB  C:\HP NEVERSTOP 1000N\Basic_Webpack_x86-49.10.4644-NSL1000_UW_Basicx86_Webpack.exe
+  [OTRO] 40.4 MB  P:\HP NEVERSTOP 1000N\Basic_Webpack_x86-49.10.4644-NSL1000_UW_Basicx86_Webpack.exe
+  [OTRO] 38.4 MB  C:\Users\GLADIS\Music\MUSICA\Mix - Los Adolescentes.mp3
+  [OTRO] 38.4 MB  C:\Users\GLADIS\VARIOS\Mix - Los Adolescentes.mp3
+  [DBF] 38.3 MB  C:\RESPAMIX\COMP01-10012023\MXHISCOB.DBF
+  [DBF] 38.3 MB  C:\RESPAMIX\COMP01-15122022\MXHISCOB.DBF
+  [DBF] 38.3 MB  C:\RESPAMIX\comp0101122022\MXHISCOB.DBF
+  [DBF] 38.3 MB  C:\RESPAMIX\comp0125042022\MXHISCOB.DBF
+  [DBF] 38.3 MB  C:\RESPAMIX\MIX11 (servidor)\comp01\MXHISCOB.DBF
+  [DBF] 38.3 MB  C:\RESPAMIX\MIX11 (servidor)\comp01-29032022\MXHISCOB.DBF
+  [DBF] 38.3 MB  C:\RESPAMIX\MIX11 (servidor)\COMP02\MXHISCOB.DBF
+  [DBF] 38.3 MB  M:\comp01\MXHISCOB.DBF
+  [DBF] 38.3 MB  M:\COMP01d\MXHISCOB.DBF
+  [DBF] 38.3 MB  M:\COMP02\MXHISCOB.DBF
+  [DBF] 38.3 MB  M:\COMP03\MXHISCOB.DBF
+  [DBF] 38.3 MB  P:\Elias\MIX\MIX11\comp01\MXHISCOB.DBF
+  [DBF] 38.2 MB  C:\RESPAMIX\MIX11 (servidor)\comp01 2019-12-02 17;30;49 (Completo)\MXHISCOB.DBF
+  [DBF] 38.2 MB  C:\RESPAMIX\MIX11 (servidor)\comp01-ORIGINAL\MXHISCOB.DBF
+  [DBF] 38.2 MB  C:\RESPAMIX\MIX11 (servidor)\COMP01C\MXHISCOB.DBF
+  [DBF] 38.2 MB  C:\RESPAMIX\MIX11 (servidor)\comp01w\MXHISCOB.DBF
+  [DBF] 38.2 MB  C:\RESPAMIX\MIX11 (servidor)\comp01z\MXHISCOB.DBF
+  [DBF] 38.2 MB  M:\comp01-ORIGINAL\MXHISCOB.DBF
+  [DBF] 38.2 MB  P:\Elias\MIX\MIX11\comp01 2019-12-02 17;30;49 (Completo)\MXHISCOB.DBF
+  [DBF] 38.2 MB  P:\Elias\MIX\MIX11\comp01-ORIGINAL\MXHISCOB.DBF
+  [DBF] 38.2 MB  P:\YETZELIA\USB\COMP01\MXHISCOB.DBF
+  [OTRO] 37.8 MB  C:\Windows\Installer\15f665.msp
+  [ZIP] 37.7 MB  P:\YETZELIA\USB\5RESPALDO MAYO 2016\RESPALDO31052016.ZIP
+  [OTRO] 37.3 MB  C:\ProgramData\BlueStacks\BluestacksGameManager\OBS\plugins\CLRHostPlugin\CLRBrowserSourcePlugin\libcef.dll
+  [OTRO] 36.3 MB  P:\BROTHER\mflpro\Data\Disk1\data2.cab
+  [OTRO] 36.0 MB  C:\ProgramData\BlueStacks\BackupData\Data.vdi.backup
+  [ZIP] 35.9 MB  P:\YETZELIA\USB\10RESPALDO 2016 OCTUBRE\RESPA041016.ZIP
+  [ZIP] 35.8 MB  P:\YETZELIA\USB\9RESPALDO 2016 SEPTIEMBRE\RESPALDO29092016.ZIP
+  [OTRO] 35.6 MB  C:\ProgramData\Panda Security\Panda Security Protection\Download\0x04015000\plug.sig
+  [DBF] 35.1 MB  C:\RESPAMIX\MIX11 (servidor)\Comp01b\EJ008\MXRENCOT.DBF
+  [DBF] 35.1 MB  C:\RESPAMIX\MIX11 (servidor)\COMP01C\EJ008\MXRENCOT.DBF
+  [DBF] 35.1 MB  C:\RESPAMIX\MIX11 (servidor)\COMP01x\EJ008\MXRENCOT.DBF
+  [DBF] 35.1 MB  C:\RESPAMIX\MIX11 (servidor)\comp01z\EJ008\MXRENCOT.DBF
+  [DBF] 35.1 MB  C:\RESPAMIX\MIX11 (servidor)\ejercicios\EJ008\MXRENCOT.DBF
+  [DBF] 35.1 MB  M:\ejercicios\EJ008\MXRENCOT.DBF
+  [DBF] 35.1 MB  P:\YETZELIA\USB\COMP01\EJ008\MXRENCOT.DBF
+  [DAT] 35.0 MB  C:\Program Files\Panda Security\Panda Security Protection\Cache\0x1000000D.DAT
+  [OTRO] 34.9 MB  C:\Windows\Microsoft.NET\Framework\v4.0.30319\SetupCache\v4.6.00081\ESN\NetFx_FullLP.mzz
+  [DBF] 34.7 MB  C:\RESPAMIX\COMP01-10012023\EJ005\MXRENCOT.DBF
+  [DBF] 34.7 MB  C:\RESPAMIX\COMP01-15122022\EJ005\MXRENCOT.DBF
+  [DBF] 34.7 MB  C:\RESPAMIX\comp0101122022\EJ005\MXRENCOT.DBF
+  [DBF] 34.7 MB  C:\RESPAMIX\comp0125042022\EJ005\MXRENCOT.DBF
+  [DBF] 34.7 MB  C:\RESPAMIX\MIX11 (servidor)\comp01\EJ005\MXRENCOT.DBF
+  [DBF] 34.7 MB  C:\RESPAMIX\MIX11 (servidor)\comp01-29032022\EJ005\MXRENCOT.DBF
+  [DBF] 34.7 MB  C:\RESPAMIX\MIX11 (servidor)\COMP02\EJ005\MXRENCOT.DBF
+  [DBF] 34.7 MB  M:\comp01\EJ005\MXRENCOT.DBF
+  [DBF] 34.7 MB  M:\COMP01d\EJ005\MXRENCOT.DBF
+  [DBF] 34.7 MB  M:\COMP02\EJ005\MXRENCOT.DBF
+  [DBF] 34.7 MB  M:\COMP03\EJ005\MXRENCOT.DBF
+  [DBF] 34.7 MB  P:\Elias\MIX\MIX11\comp01\EJ005\MXRENCOT.DBF
+  [ZIP] 34.6 MB  P:\YETZELIA\USB\9RESPALDO 2016 SEPTIEMBRE\RESPALDO21092016.ZIP
+  [OTRO] 34.3 MB  P:\PRUEBA\Antivirus Microsoft\windows6.1-kb4474419-v3-x86_0f687d50402790f340087c576886501b3223bec6.msu
+  [OTRO] 33.4 MB  C:\Users\GLADIS\AppData\Local\Temp\7zS0ED0\HP-DQEX5.exe
+  [OTRO] 33.3 MB  C:\Program Files\Adobe\Acrobat Reader DC\Reader\AdobeCollabSync.exe
+  [ZIP] 33.2 MB  P:\YETZELIA\USB\8RESPALDO 2016 AGOSTO\RESPA23082016.ZIP
+  [OTRO] 32.8 MB  C:\Windows\Installer\18c109c.msi
+  [DBF] 32.5 MB  C:\RESPAMIX\MIX11 (servidor)\comp01w\MXRENCOT.DBF
+  [OTRO] 32.4 MB  C:\Windows\Installer\24915f.msp
+  [DAT] 32.4 MB  C:\Windows\winsxs\ManifestCache\a786a517e28d5687_blobs.bin
+  [OTRO] 32.2 MB  C:\Windows\Fonts\mingliub.ttc
+  [OTRO] 32.2 MB  C:\Windows\winsxs\Backup\x86_microsoft-windows-font-truetype-mingliub_31bf3856ad364e35_6.1.7600.16385_none_c8f7fdc19988b363_mingliub.ttc_b8743970
+  [OTRO] 32.2 MB  C:\Windows\winsxs\x86_microsoft-windows-font-truetype-mingliub_31bf3856ad364e35_6.1.7600.16385_none_c8f7fdc19988b363\mingliub.ttc
+  [OTRO] 32.2 MB  C:\Program Files\Adobe\Acrobat Reader DC\Reader\AcroRd32Res.dll
+  [ZIP] 32.1 MB  P:\YETZELIA\USB\8RESPALDO 2016 AGOSTO\RESPALDO09082016.ZIP
+  [ZIP] 32.1 MB  P:\YETZELIA\USB\8RESPALDO 2016 AGOSTO\RESPA02082016.ZIP
+  [DAT] 32.1 MB  C:\Users\ANDRES\AppData\Local\Microsoft\Windows\WebCache\WebCacheV01.dat
+  [OTRO] 32.0 MB  C:\Users\GLADIS\AppData\Local\Google\Chrome\User Data\Default\Cache\Cache_Data\data_3
+  [OTRO] 32.0 MB  C:\Program Files\Mozilla Firefox\updated\omni.ja
+  [OTRO] 31.9 MB  C:\Windows\winsxs\x86_microsoft-windows-s..erinboxgames-spades_31bf3856ad364e35_6.1.7600.16385_none_13883bb2626e33de\ShvlRes.dll
+  [OTRO] 31.9 MB  C:\Program Files\Mozilla Firefox\omni.ja
+  [DBF] 31.6 MB  C:\RESPAMIX\MIX11 (servidor)\comp01 2019-12-02 17;30;49 (Completo)\MXRENCOT.DBF
+  [DBF] 31.6 MB  C:\RESPAMIX\MIX11 (servidor)\comp01-ORIGINAL\MXRENCOT.DBF
+  [DBF] 31.6 MB  M:\comp01-ORIGINAL\MXRENCOT.DBF
+  [DBF] 31.6 MB  P:\Elias\MIX\MIX11\comp01 2019-12-02 17;30;49 (Completo)\MXRENCOT.DBF
+  [DBF] 31.6 MB  P:\Elias\MIX\MIX11\comp01-ORIGINAL\MXRENCOT.DBF
+  [DBF] 31.6 MB  C:\RESPAMIX\COMP01-10012023\EJ004\MXRENCOT.DBF
+  [DBF] 31.6 MB  C:\RESPAMIX\COMP01-15122022\EJ004\MXRENCOT.DBF
+  [DBF] 31.6 MB  C:\RESPAMIX\comp0101122022\EJ004\MXRENCOT.DBF
+  [DBF] 31.6 MB  C:\RESPAMIX\comp0125042022\EJ004\MXRENCOT.DBF
+  [DBF] 31.6 MB  C:\RESPAMIX\MIX11 (servidor)\comp01\EJ004\MXRENCOT.DBF
+  [DBF] 31.6 MB  C:\RESPAMIX\MIX11 (servidor)\comp01-29032022\EJ004\MXRENCOT.DBF
+  [DBF] 31.6 MB  C:\RESPAMIX\MIX11 (servidor)\COMP02\EJ004\MXRENCOT.DBF
+  [DBF] 31.6 MB  M:\comp01\EJ004\MXRENCOT.DBF
+  [DBF] 31.6 MB  M:\COMP01d\EJ004\MXRENCOT.DBF
+  [DBF] 31.6 MB  M:\COMP02\EJ004\MXRENCOT.DBF
+  [DBF] 31.6 MB  M:\COMP03\EJ004\MXRENCOT.DBF
+  [DBF] 31.6 MB  P:\Elias\MIX\MIX11\comp01\EJ004\MXRENCOT.DBF
+  [DBF] 31.5 MB  C:\RESPAMIX\MIX11 (servidor)\comp01z\MXRENCOT.DBF
+  [DBF] 31.4 MB  C:\RESPAMIX\MIX11 (servidor)\COMP01C\MXRENCOT.DBF
+  [OTRO] 30.7 MB  C:\Windows\Fonts\mingliu.ttc
+  [OTRO] 30.7 MB  C:\Windows\winsxs\x86_microsoft-windows-font-truetype-mingliu_31bf3856ad364e35_6.1.7600.16385_none_baf0bff4e950f00f\mingliu.ttc
+  [ZIP] 30.1 MB  P:\YETZELIA\USB\8RESPALDO 2016 AGOSTO\RESPADO310816.ZIP
+  [DBF] 29.6 MB  C:\RESPAMIX\COMP01-10012023\MXRENPED.DBF
+  [ZIP] 29.5 MB  P:\YETZELIA\USB\6RESPALDO JUNIO 2016\RESPALDO15062016.ZIP
+  [DBF] 29.5 MB  C:\RESPAMIX\COMP01-15122022\MXRENPED.DBF
+  [OTRO] 29.2 MB  C:\Program Files\Adobe\Acrobat Reader DC\Reader\icudt71_full.dll
+  [OTRO] 28.9 MB  C:\Windows\Installer\30df88.msp
+  [OTRO] 28.8 MB  C:\Windows\SoftwareDistribution\Download\447a18aacc5a0c51310028cdb4a2a5d2a136b830
+  [DBF] 28.8 MB  C:\RESPAMIX\comp0101122022\MXRENPED.DBF
+  [DBF] 28.5 MB  C:\RESPAMIX\MIX11 (servidor)\Comp01b\EJ007\MXRENCOT.DBF
+  [DBF] 28.5 MB  C:\RESPAMIX\MIX11 (servidor)\COMP01C\EJ007\MXRENCOT.DBF
+  [DBF] 28.5 MB  C:\RESPAMIX\MIX11 (servidor)\COMP01x\EJ007\MXRENCOT.DBF
+  [DBF] 28.5 MB  C:\RESPAMIX\MIX11 (servidor)\comp01z\EJ007\MXRENCOT.DBF
+  [DBF] 28.5 MB  C:\RESPAMIX\MIX11 (servidor)\ejercicios\EJ007\MXRENCOT.DBF
+  [DBF] 28.5 MB  M:\ejercicios\EJ007\MXRENCOT.DBF
+  [DBF] 28.5 MB  P:\YETZELIA\USB\COMP01\EJ007\MXRENCOT.DBF
+  [OTRO] 28.4 MB  C:\Program Files\Common Files\SpeechEngines\Microsoft\TTS20\en-US\enu-dsk\M1033DSK.CSD
+  [OTRO] 28.4 MB  C:\Windows\winsxs\x86_microsoft-windows-mulanttsvoiceenudsk_31bf3856ad364e35_6.1.7600.16385_none_0f51daf70520cd99\M1033DSK.CSD
+  [OTRO] 28.0 MB  C:\Program Files\Nero\Nero 10\Nero Burning ROM\Nero.exe
+  [OTRO] 28.0 MB  C:\Program Files\Nero\Nero 10\Nero Burning ROM\NeroExpress.exe
+  [OTRO] 27.7 MB  C:\Windows\winsxs\x86_microsoft-windows-s..iuminboxgames-chess_31bf3856ad364e35_6.1.7600.16385_none_74aaf7f0dfbacf9f\Chess.dll
+  [OTRO] 27.4 MB  C:\Windows\Installer\18c1037.msi
+  [OTRO] 27.3 MB  C:\Windows\winsxs\x86_microsoft-windows-s..oxgames-purbleplace_31bf3856ad364e35_6.1.7600.16385_none_0601d49e5fc57a03\PurblePlace.dll
+  [OTRO] 27.0 MB  C:\Windows\Installer\f3d273.msi
+  [OTRO] 26.4 MB  C:\Windows\System32\DriverStore\FileRepository\igdlh.inf_x86_neutral_332b058f4da44e53\igdrcl32.dll
