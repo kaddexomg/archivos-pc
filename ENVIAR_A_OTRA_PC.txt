@@ -1,5 +1,5 @@
-COMO USAR EL EXTRACTOR DE CLIENTES MIXNET
-=========================================
+COMO USAR EL EXTRACTOR DE CLIENTES MIXNET (v2)
+================================================
 
 1) COPIAR ESTOS 2 ARCHIVOS A LA OTRA PC (la Windows 7 de la tienda,
    la que tiene las unidades M:, P:, Z: y las carpetas C:\RESPAMIX):
@@ -7,36 +7,61 @@ COMO USAR EL EXTRACTOR DE CLIENTES MIXNET
    - extraer-clientes-mixnet.cjs
    - extraer-clientes-mixnet.bat
 
-   Copialos en una carpeta del Escritorio, por ejemplo:
-   C:\Users\<usuario>\Desktop\EXTRACCION_CLIENTES\
+   Copialos en el ESCRITORIO de esa PC.
 
 2) HACER DOBLE CLIC EN extraer-clientes-mixnet.bat
 
-   Eso es todo. NO hay que escribir NINGUN comando.
+   Aparecera un menu con 3 opciones:
 
-   El script:
-   - Detecta la compania activa (busca MXCTACLI.DBF en todas las unidades,
-     en rutas tipicas, y tambien usando reporte_mixnet.json si existe)
-   - Lee todos los clientes
-   - Escanea TODAS las unidades (M:, P:, Z:, C:, D:...) buscando el CORREO
-     por su VALOR (@) en cualquier tabla DBF, incluso en respaldos RESPAMIX,
-     bajando hasta 40 niveles de profundidad en cualquier carpeta
-   - Muestra EN VIVO la carpeta que esta revisando (para que veas que va)
-   - Cruza cada correo con su cliente por RIF, codigo, telefono y razon social
-   - Genera el archivo:  clientes_mixnet_FECHA_HORA.csv
-     SIEMPRE en el ESCRITORIO de esta PC (no importa donde este el .bat).
+   [1] EXTRAER  →  Flujo completo automatico (busca todo y genera CSV)
+   [2] EXPLORAR →  VER que hay en la PC (archivos DBF, emails encontrados)
+   [3] DIAGNOSTICAR →  Ver emails en una carpeta especifica
+
+   RECOMENDACION: Primero elige [2] EXPLORAR para ver que hay.
+   Luego elige [1] EXTRAER para generar el archivo.
 
 3) SI LA OTRA PC NO TIENE NODE INSTALADO
    El .bat buscara Node automaticamente. Si no lo encuentra, la ventana
    te avisara. Instala Node desde https://nodejs.org/ (Windows .msi)
    y repite el paso 2.
 
-=========================================================
+================================================
 
-NOTA IMPORTANTE: 
-- El CJS tambien se puede ejecutar SIN el .bat haciendo doble clic directo
-  sobre extraer-clientes-mixnet.cjs (si Node esta instalado).
-- Si alguien sabe EXACTAMENTE donde estan los datos de una compania,
-  puede ejecutar (opcional):
-    node extraer-clientes-mixnet.cjs --completo --dir "M:\comp01"
-  pero NO hace falta: el flujo automatico lo encuentra solo.
+QUE HACE CADA OPCION:
+
+[1] EXTRAER (flujo completo):
+   - Detecta todas las unidades accesibles (M:/ P:/ Z:/ C:/ etc.)
+   - Busca MXCTACLI.DBF (tabla de clientes)
+   - Lee TODOS los clientes
+   - Escanea TODAS las unidades buscando CUALQUIER archivo DBF con emails
+   - Cruza cada email con su cliente por RIF, codigo, telefono y razon social
+   - Genera: clientes_mixnet_FECHA.csv en el ESCRITORIO
+   - Muestra EN VIVO todo lo que hace (carpetas, archivos, errores)
+
+[2] EXPLORAR (ver que hay):
+   - Muestra que unidades estan conectadas
+   - Lista TODOS los archivos DBF encontrados
+   - Indica cuales tienen emails
+   - Guarda un reporte: exploracion_mixnet_FECHA.csv
+   - UTIL PARA SABER DONDE ESTAN LOS DATOS
+
+[3] DIAGNOSTICAR:
+   - Pide la ruta de una carpeta (ej: M:\comp01)
+   - Muestra todos los archivos DBF de esa carpeta
+   - Indica cuales tienen emails y cuantos
+
+================================================
+
+SI NO FUNCIONA:
+- Ejecuta primero la opcion [2] EXPLORAR para ver que archivos DBF existen
+- Revisa si las unidades de red (M:/ P:/ Z:/) aparecen como "OK"
+- Si no aparecen, verifica que la red este conectada y las unidades montadas
+- Si aparecen pero no hay DBF, los datos pueden estar en otra ruta
+- El reporte de exploracion te dice exactamente que encontro
+
+================================================
+
+NOTA: El CJS tambien se puede ejecutar directamente:
+  node extraer-clientes-mixnet.cjs              → flujo completo
+  node extraer-clientes-mixnet.cjs --explorar   → ver que hay
+  node extraer-clientes-mixnet.cjs --diagnostico → ver emails

@@ -1,24 +1,26 @@
 @echo off
-chcp 65001 >nul
+chcp 65001 >nul 2>nul
 title JJ Paper - Extraer CLIENTES de MixNet
+color 0F
+
 echo.
 echo ========================================================
 echo    EXTRACTOR DE CLIENTES MIXNET  (solo lectura)
 echo ========================================================
 echo.
-echo  ESTE SCRIPT SOLO LEE. No modifica nada de MixNet.
-echo.
-echo  Buscando Node.js instalado...
+echo  Este script SOLO LEE. No modifica nada de MixNet.
 echo.
 
-REM 1) ¿Node esta en el PATH?
+REM 1) Buscar Node.js
+echo  Buscando Node.js...
+echo.
+
 where node >nul 2>nul
 if %errorlevel%==0 (
   set "NODE=node"
-  goto RUN
+  goto FOUND
 )
 
-REM 2) Rutas comunes de instalacion (x64, x86, portable)
 set "NODE="
 for %%p in (
   "%ProgramFiles%\nodejs\node.exe"
@@ -38,76 +40,99 @@ for %%p in (
 ) do (
   if exist %%p set "NODE=%%~p"
 )
-if defined NODE goto RUN
+if defined NODE goto FOUND
 
-REM 3) Busqueda amplia en el disco C: (puede tardar la 1a vez)
-echo  No esta en las rutas comunes. Buscando en todo el disco C: ...
-echo  (Esto puede tardar; no cierres esta ventana)
+echo  No esta en rutas comunes. Buscando en C:\...
+echo  (Esto puede tardar 1-2 minutos, no cierres esta ventana)
 for /f "delims=" %%f in ('where /R "C:\" node.exe 2^>nul') do (
   set "NODE=%%f"
-  goto RUN
-)
-for /f "delims=" %%f in ('dir /s /b "C:\node.exe" 2^>nul') do (
-  set "NODE=%%f"
-  goto RUN
+  goto FOUND
 )
 
-REM 4) Si aun no se encontro, probar el lanzador de npm/npx
-if not exist "%NODE%" set "NODE="
-where npx >nul 2>nul
-if %errorlevel%==0 (
-  echo  Se encontro herramientas Node (npx). Intentando localizar node.exe...
-  for /f "delims=" %%f in ('where npx 2^>nul') do set "NPXDIR=%%~dpf"
-  if exist "%NPXDIR%node.exe" set "NODE=%NPXDIR%node.exe"
-)
-if defined NODE goto RUN
-
 echo.
-echo  [ERROR] No se encontro Node.js en ninguna ubicacion.
+echo  ============================================
+echo   [ERROR] No se encontro Node.js
+echo  ============================================
 echo.
-echo  Para ejecutar este script se necesita Node.js (v13 o superior).
-echo  Puedes instalarlo desde:  https://nodejs.org/
-echo  (Elige "Windows Installer .msi", instala aceptando las opciones
-echo   por defecto, cierra y abre esta ventana, y vuelve a probar).
-echo.
-echo  - O -  si sabes la carpeta exacta donde esta instalado Node,
-echo  edita este archivo y pon en la linea de abajo SX:
-echo    set "NODE=C:\ruta\exacta\a\node.exe"
+echo  Necesitas Node.js v13 o superior.
+echo  Descarga desde: https://nodejs.org/
+echo  Instala con opciones por defecto, reinicia, y vuelve a probar.
 echo.
 pause
 exit /b 1
 
-:RUN
-echo.
+:FOUND
 echo  Node encontrado: %NODE%
 echo.
+
+:MENU
 echo ========================================================
-echo   INICIANDO FLUJO AUTOMATICO... No hace falta que hagas
-echo   nada. El script hara todo solo y avisara al terminar.
+echo   QUE QUIERES HACER?
 echo ========================================================
 echo.
-echo  Nombre del archivo de salida (con fecha y hora):
+echo   1.  EXTRAER clientes (flujo completo automatico)
+echo   2.  EXPLORAR primero (VER que hay en esta PC)
+echo   3.  DIAGNOSTICAR una carpeta especifica
+echo.
+echo ========================================================
+echo.
+
+set /p "OPCION=Elige una opcion (1, 2 o 3): "
+
+if "%OPCION%"=="1" goto EXTRAER
+if "%OPCION%"=="2" goto EXPLORAR
+if "%OPCION%"=="3" goto DIAGNOSTICO
+echo  Opcion no valida. Elige 1, 2 o 3.
+echo.
+goto MENU
+
+:EXTRAER
+echo.
+echo ========================================================
+echo   EXTRAYENDO TODOS LOS CLIENTES...
+echo ========================================================
+echo.
 for /f "tokens=1-3 delims=/ " %%a in ('date /t') do set "DD=%%c%%a%%b"
 for /f "tokens=1-2 delims=:" %%a in ('time /t') do set "HH=%%a%%b"
 set "OUT=clientes_mixnet_%DD%_%HH%.csv"
-echo    %OUT%
+echo  Archivo de salida: %OUT%
 echo.
-echo  Esto puede tardar varios minutos (escanea todas las unidades
-echo  buscando el email). NO cierres esta ventana. Espera a que
-echo  diga "TERMINADO" y "ARCHIVO GENERADO".
+echo  Esto puede tardar varios minutos (escanea todas las unidades).
+echo  NO cierres esta ventana. Espera a que diga "TERMINADO".
 echo.
-echo  -------------------------------------------------------
-echo   Trabajando... (si ves progreso, esta normal)
-echo  -------------------------------------------------------
+echo --------------------------------------------------------
 echo.
 "%NODE%" "%~dp0extraer-clientes-mixnet.cjs" --completo --out "%OUT%"
+goto FIN
+
+:EXPLORAR
 echo.
+echo ========================================================
+echo   EXPLORANDO QUE HAY EN ESTA PC...
+echo ========================================================
+echo.
+echo  Esto puede tardar varios minutos.
+echo.
+"%NODE%" "%~dp0extraer-clientes-mixnet.cjs" --explorar
+goto FIN
+
+:DIAGNOSTICO
+echo.
+echo  Escribe la ruta de la carpeta de MixNet.
+echo  Ejemplo: M:\comp01
+echo  (Si no sabes, elige opcion 2 "EXPLORAR" primero)
+echo.
+set /p "RUTA=Ruta: "
+echo.
+"%NODE%" "%~dp0extraer-clientes-mixnet.cjs" --diagnostico "%RUTA%"
+goto FIN
 
 :FIN
 echo.
-echo  ========================================================
-echo   EL FLUJO TERMINO. Revisa el archivo:  %OUT%
-echo   (se guardo en el ESCRITORIO de esta PC)
-echo  ========================================================
+echo ========================================================
+echo   PROCESO TERMINADO.
+echo   Si genero un archivo, revisa tu ESCRITORIO.
+echo ========================================================
 echo.
-pause
+echo  Presiona cualquier tecla para cerrar...
+pause >nul
