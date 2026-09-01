@@ -2,15 +2,34 @@
   ============================================================
   JJ Paper — Extractor de CLIENTES desde MixNet (DBF dBase)
   ============================================================
-  Versión 2.0 — Reescrito para funcionar de VERDAD en la PC
-  con acceso a la red de la empresa.
+  Versión 3.0 — "SIEMPRE GENERA EL ARCHIVO + BUSCA CORREOS
+  HASTA UN OBJETIVO DE COBERTURA"
 
-  RECOMENDADO:
-    node extraer-clientes-mixnet.cjs                (flujo completo)
-    node extraer-clientes-mixnet.cjs --explorar     (VER qué hay)
-    node extraer-clientes-mixnet.cjs --diagnostico  (ver emails)
+  ARREGLOS v3 (vs v2):
+  1. El CSV de clientes se escribe INMEDIATAMENTE después de leer
+     MXCTACLI (no al final). Aunque la búsqueda de correos se
+     cancele o tarde, SIEMPRE queda el archivo con los clientes.
+  2. Luego se busca correos con un PRESUPUESTO DE TIEMPO y se va
+     REESCRIBIENDO el CSV en cada ronda mientras mejora la
+     cobertura. No hay que esperar a que termine todo.
+  3. Cruce de correos por 5 llaves: código de cliente, RIF
+     (incluye campo real "cifoih"), teléfono, correo directo en
+     la tabla principal y razón social (fuzzy al final).
+  4. Normalización de códigos (001-795 == 1-795) y teléfonos.
+  5. Genera además: clientes_sin_correo_FECHA.csv (para captura
+     manual) y resumen_mixnet_FECHA.csv (cobertura/estadísticas).
+  6. El escaneo PRIORIZA carpetas tipo MixNet (comp*, RESPAMIX,
+     ventas, factura*, datos, MX*) sobre el resto del disco.
 
-  Compatible con Node 13 (CommonJS). 2026-09-01 v2
+  USO:
+    node extraer-clientes-mixnet.cjs
+      → flujo completo (objetivo 60%, presupuesto 300 s)
+    node extraer-clientes-mixnet.cjs --objetivo 75 --tiempo 600
+      → busca hasta 75% de cobertura o 10 min, lo que llegue antes
+    node extraer-clientes-mixnet.cjs --explorar
+    node extraer-clientes-mixnet.cjs --diagnostico "RUTA"
+
+  Compatible con Node 13 (CommonJS). 2026-09-01 v3
   ============================================================
 */
 'use strict';
@@ -33,7 +52,7 @@ function log(msg) {
 }
 
 /* ============================================================
-   LECTOR DBF —-Compatible Node 13, tolerante a errores
+   LECTOR DBF — Compatible Node 13, tolerante a errores
    ============================================================ */
 function readDbfHeader(buf) {
   var type = buf[0];
@@ -177,9 +196,18 @@ function extractEmail(v) {
 
 function extractPhone(v) {
   if (v == null) return '';
-  var s = String(v).replace(/\s+/g, '');
+  var s = String(v).replace(/[^\d.]/g, '');
   var m = s.match(/\d{7,}/);
   return m ? m[0] : '';
+}
+
+/* Normaliza códigos de cliente: "001-795" -> "1-795", "000123" -> "123" */
+function normCod(s) {
+  if (s == null) return '';
+  return String(s).toLowerCase().replace(/\s+/g, '').split('-')
+    .map(function (seg) { return seg.replace(/^0+/, ''); })
+    .join('-')
+    .replace(/[^a-z0-9\-]/g, '');
 }
 
 function escCSV(v) {
@@ -274,73 +302,141 @@ function detectarUnidades() {
 }
 
 /* ============================================================
-   ESCANEO RECURSIVO DE ARCHIVOS DBF
+   ESCANEO RECURSIVO CON PRESUPUESTO DE TIEMPO y PRIORIDAD
    ============================================================ */
 var EXCLUDE_SCAN = /windows|program files|programdata|appdata|perflogs|\$recycle|fonts|drivers|\.git|node_modules|\$windows|bluestacks|anaconda|nodejs|python|nvidia|intel\b|\.thumbnails|dcim|music|videos|pictures|musica|common files|microsoft office|microsoft.net|installshield|nero|brother|bullzip|hp\\|adobe|mozilla|google|java\\|intel\\|dvd maker/i;
 
-function walkDbf(dir, depth, results, stats) {
-  if (depth > 40) return;
+// Carpetas con probabilidad ALTA de contener datos MixNet → se exploran primero
+var PRIORITY_DIRS = /mixnet|mixer|respami|comp\d|comp-|multiemp|ventas|venta|factura|sistema|sistemas|datos|base|clientes|contab|bases|dbf|banco|admin|\bmx\b|mixnetdata/i;
 
-  stats.carpetas++;
-  if (stats.carpetas % 200 === 0) {
-    log('    ...recorriendo: ' + dir + ' (' + stats.carpetas + ' carpetas, ' +
-      stats.dbfEncontrados + ' DBF encontrados, ' + stats.conEmail + ' con email)');
+function crearEscaneador(unidades) {
+  var queue = [];
+  var visitados = {};
+  var stats = { carpetas: 0, dbfEncontrados: 0, conEmail: 0, errores: 0, ignoradas: 0 };
+  var meta = []; // metadata de cada DBF con emails posible
+
+  // Semillas: la raiz de cada unidad
+  for (var i = 0; i < unidades.length; i++) {
+    queue.push({ dir: unidades[i].root, prio: 0, depth: 0 });
   }
 
-  var entries;
-  try {
-    entries = fs.readdirSync(dir, { withFileTypes: true });
-  } catch (_) {
-    stats.errores++;
-    return;
+  function prioridadDe(nombre, depth) {
+    var p = 100 - depth * 3;
+    if (PRIORITY_DIRS.test(nombre)) p += 800;
+    if (/\.bak|backup|old|orig|tmp/i.test(nombre)) p -= 400;
+    return p;
   }
 
-  for (var i = 0; i < entries.length; i++) {
-    var e = entries[i];
-    var fp = path.join(dir, e.name);
+  return {
+    stats: stats,
+    meta: meta,
+    hayPendientes: function () { return queue.length > 0; },
+    pendientes: function () { return queue.length; },
 
-    if (e.isDirectory()) {
-      if (EXCLUDE_SCAN.test(e.name)) {
-        stats.ignoradas++;
-        continue;
-      }
-      walkDbf(fp, depth + 1, results, stats);
-    } else if (e.isFile()) {
-      // Buscar CUALQUIER archivo .dbf (no solo MXCTACLI)
-      if (/\.dbf$/i.test(e.name)) {
-        stats.dbfEncontrados++;
-        var st;
-        try { st = fs.statSync(fp); } catch (_) { continue; }
-        if (st.size < 33) continue;
+    /* Procesa hasta `limite` carpetas en esta llamada. Devuelve los DBF
+       con datos leidos (para construir el indice de correos). */
+    recorrer: function (limite) {
+      var dbLeidos = [];
+      var procesadas = 0;
 
-        // Leer el DBF y ver si tiene emails
-        var db = parsedb(fp, true, false);
-        if (db && db.rows && db.rows.length > 0) {
-          var tieneMail = false;
-          for (var ri = 0; ri < db.rows.length && !tieneMail; ri++) {
-            var row = db.rows[ri];
-            // Buscar en todos los campos
-            var keys = Object.keys(row);
-            for (var ki = 0; ki < keys.length; ki++) {
-              if (extractEmail(row[keys[ki]])) {
-                tieneMail = true;
+      queue.sort(function (a, b) { return b.prio - a.prio; });
+
+      while (queue.length && procesadas < limite) {
+        var item = queue.pop();
+        var dir = item.dir;
+        var depth = item.depth;
+        procesadas++;
+
+        if (visitados[dir]) continue;
+        visitados[dir] = true;
+
+        if (depth > 40) continue;
+        stats.carpetas++;
+
+        var entries;
+        try {
+          entries = fs.readdirSync(dir, { withFileTypes: true });
+        } catch (_) {
+          stats.errores++;
+          continue;
+        }
+
+        for (var i = 0; i < entries.length; i++) {
+          var e = entries[i];
+          var fp = path.join(dir, e.name);
+
+          if (e.isDirectory()) {
+            if (EXCLUDE_SCAN.test(e.name)) {
+              stats.ignoradas++;
+              continue;
+            }
+            queue.push({ dir: fp, prio: prioridadDe(e.name, depth + 1), depth: depth + 1 });
+          } else if (e.isFile() && /\.dbf$/i.test(e.name)) {
+            stats.dbfEncontrados++;
+            var st;
+            try { st = fs.statSync(fp); } catch (_) { continue; }
+            if (st.size < 33) continue;
+
+            // Búsqueda rápida de emails EN EL ARCHIVO sin parser completo
+            var dbMeta = { path: fp, nombre: e.name, size: st.size, tieneEmail: false, regs: -1, campos: [] };
+
+            // Revisar header para campos
+            var hdrFd = fs.openSync(fp, 'r');
+            var hdrBuf = Buffer.alloc(512);
+            fs.readSync(hdrFd, hdrBuf, 0, 512, 0);
+            fs.closeSync(hdrFd);
+            var hLen = hdrBuf.readUInt16LE(8);
+            if (hLen < 32 || hLen > 4096) continue;
+            var numRec = hdrBuf.readUInt32LE(4);
+            dbMeta.regs = numRec;
+
+            var campos = readDbfFields(hdrBuf, hLen);
+            dbMeta.campos = campos.map(function (f) { return f.name.trim().toLowerCase(); });
+
+            // Detectar campos de correo en el header
+            var tieneCampoMail = false;
+            for (var ci = 0; ci < campos.length; ci++) {
+              var cn = campos[ci].name.toLowerCase();
+              if (/corr|mail|email|nmail|clave|correo|agenda|e_mail|e-mail/i.test(cn)) {
+                tieneCampoMail = true;
                 break;
               }
             }
+
+            // Leer el DBF completo SOLO si tiene campo de correo o el archivo es MX*/COD*
+            var archivoSospechoso = /MX|CLI|COD|CTACLI|AGEN|CONTAC|CORREO|MAIL|EMAIL/i.test(e.name);
+            if (!tieneCampoMail && !archivoSospechoso) continue;
+
+            var db = parsedb(fp, true, false);
+            if (!db || !db.rows || !db.rows.length) continue;
+
+            // Confirmar emails por valor
+            var tieneMail = false;
+            for (var ri = 0; ri < db.rows.length && !tieneMail; ri++) {
+              var row = db.rows[ri];
+              var keys = Object.keys(row);
+              for (var ki = 0; ki < keys.length; ki++) {
+                if (extractEmail(row[keys[ki]])) { tieneMail = true; break; }
+              }
+            }
+            dbMeta.tieneEmail = tieneMail;
+            if (tieneMail) stats.conEmail++;
+
+            meta.push(dbMeta);
+            dbLeidos.push(db);
           }
-          results.push({
-            path: fp,
-            nombre: e.name,
-            size: st.size,
-            registros: db.rows.length,
-            campos: db.fields.map(function (f) { return f.name.trim().toLowerCase(); }),
-            tieneEmail: tieneMail
-          });
-          if (tieneMail) stats.conEmail++;
+        }
+
+        // Progreso
+        if (stats.carpetas % 300 === 0) {
+          log('    ...' + stats.carpetas + ' carpetas, ' + stats.dbfEncontrados + ' DBF, ' +
+            stats.conEmail + ' con email');
         }
       }
+
+      return dbLeidos;
     }
-  }
+  };
 }
 
 /* ============================================================
@@ -348,8 +444,10 @@ function walkDbf(dir, depth, results, stats) {
    ============================================================ */
 var COMP_NAMES = ['MXCTACLI', 'mxctacli', 'MXSUCCLI', 'mxsuccli'];
 
-function buscarMxctacli(unidades) {
+function buscarMxctacli(unidades, tiempoMaxMs) {
   var encontrados = [];
+  var tIni = Date.now();
+  var presupuesto = tiempoMaxMs || 90000;
 
   // Estrategia 1: buscar en rutas típicas
   var tipicas = [
@@ -383,30 +481,27 @@ function buscarMxctacli(unidades) {
     }
   }
 
-  // Estrategia 2: escaneo recursivo buscando MXCTACLI.DBF
+  // Estrategia 2: escaneo rápido por prioridad buscando MXCTACLI.DBF
   if (encontrados.length === 0) {
-    log('  No se encontró en rutas típicas. Buscando en toda la red...');
-    for (var ui2 = 0; ui2 < unidades.length; ui2++) {
-      var u2 = unidades[ui2];
-      log('  Escaneando ' + u2.letra + '/ ...');
-      var files = [];
-      var stats = { carpetas: 0, dbfEncontrados: 0, conEmail: 0, errores: 0, ignoradas: 0 };
-      walkDbf(u2.root, 0, files, stats);
-
-      for (var fi = 0; fi < files.length; fi++) {
-        var f = files[fi];
-        if (/MXCTACLI/i.test(f.nombre)) {
-          var db2 = parsedb(f.path, false, false);
+    log('  No se encontró en rutas típicas. Buscando en la red (con presupuesto)...');
+    var esc = crearEscaneador(unidades);
+    while (esc.hayPendientes() && Date.now() - tIni < presupuesto) {
+      var dbLeidos = esc.recorrer(2000);
+      for (var di = 0; di < esc.meta.length; di++) {
+        var m = esc.meta[di];
+        if (encontrados.length === 0 && /MXCTACLI/i.test(m.nombre)) {
+          var db2 = parsedb(m.path, false, false);
           encontrados.push({
-            dir: path.dirname(f.path),
-            path: f.path,
-            size: f.size,
+            dir: path.dirname(m.path),
+            path: m.path,
+            size: m.size,
             regs: db2 ? db2.header.numRecords : -1,
             fuente: 'escaneo'
           });
-          log('  [HALLAZGO] ' + f.path + ' (' + (db2 ? db2.header.numRecords : '?') + ' registros)');
+          log('  [HALLAZGO] ' + m.path + ' (' + (db2 ? db2.header.numRecords : '?') + ' registros)');
         }
       }
+      if (encontrados.length) break;
     }
   }
 
@@ -416,41 +511,7 @@ function buscarMxctacli(unidades) {
 }
 
 /* ============================================================
-   BÚSQUEDA DE EMAILS EN TODOS LOS DBF
-   ============================================================ */
-function buscarEmailsEnTodos(unidades, modoVerbose) {
-  var todosLosDbf = [];
-  var stats = { carpetas: 0, dbfEncontrados: 0, conEmail: 0, errores: 0, ignoradas: 0 };
-
-  log('Escaneando TODAS las unidades en busca de archivos DBF con emails...');
-
-  for (var i = 0; i < unidades.length; i++) {
-    var u = unidades[i];
-    log('\n  === Unidad ' + u.letra + '/ ===');
-    var archivos = [];
-    walkDbf(u.root, 0, archivos, stats);
-
-    if (modoVerbose) {
-      log('  Resumen ' + u.letra + ': ' + stats.carpetas + ' carpetas, ' +
-        stats.dbfEncontrados + ' DBF totales, ' + stats.conEmail + ' con email');
-    }
-
-    for (var j = 0; j < archivos.length; j++) {
-      var db = parsedb(archivos[j].path, true, false);
-      if (db && db.rows && db.rows.length > 0) {
-        todosLosDbf.push(db);
-      }
-    }
-  }
-
-  log('\n  TOTAL: ' + stats.dbfEncontrados + ' archivos DBF encontrados, ' +
-    stats.conEmail + ' con emails, ' + stats.errores + ' errores de acceso');
-
-  return { dbFiles: todosLosDbf, stats: stats };
-}
-
-/* ============================================================
-   CONSTRUIR ÍNDICE DE CORREOS
+   CONSTRUIR ÍNDICE DE CORREOS (con códigos normalizados)
    ============================================================ */
 function buildEmailIndex(dbFiles) {
   var idx = {
@@ -458,6 +519,7 @@ function buildEmailIndex(dbFiles) {
     byRif: {},
     byCod: {},
     byTel: {},
+    byTel10: {},
     rows: [],
     dbfConMail: 0,
     ejemplos: []
@@ -473,10 +535,10 @@ function buildEmailIndex(dbFiles) {
     }
 
     var tRaz = findField(tk, ['razon', 'razonsocial', 'nombre', 'nombrecli', 'cliente', 'denominacion', 'descrip', 'descr'], null);
-    var tRif = findField(tk, ['rif', 'nit', 'cedula', 'cedul', 'identif', 'identidad', 'rifc'], null);
-    var tCod = findField(tk, ['cod', 'codigo', 'cod_cli', 'codcli', 'cod_cta', 'cta', 'ctacli', 'deudor', 'cliente'], null);
+    var tRif = findField(tk, ['rif', 'nit', 'cedula', 'cedul', 'identif', 'identidad', 'rifc', 'cif', 'cifoi', 'cifoih', 'codrif'], null);
+    var tCod = findField(tk, ['cod', 'codigo', 'cod_cli', 'codcli', 'cod_cta', 'cta', 'ctacli', 'deudor', 'cliente', 'codigo_cli'], null);
     var tTel = findField(tk, ['telf', 'telef', 'tel', 'tfono', 'tfn', 'movil', 'celular', 'tlf'], null);
-    var tCoor = findField(tk, ['corr', 'correo', 'email', 'e_mail', 'e-mail', 'connected', 'into', 'destino'], null);
+    var tCoor = findField(tk, ['corr', 'correo', 'email', 'e_mail', 'e-mail', 'connected', 'into', 'destino', 'nmail', 'clave', 'agenda'], null);
 
     var tablaMail = false;
 
@@ -525,7 +587,7 @@ function buildEmailIndex(dbFiles) {
         });
       }
 
-      // Índices por clave
+      // Índices por clave normalizadas
       if (raz) {
         var k = normTxt(raz);
         if (!idx.byRazon[k]) idx.byRazon[k] = [];
@@ -536,17 +598,143 @@ function buildEmailIndex(dbFiles) {
         if (!idx.byRif[kr]) idx.byRif[kr] = mail;
       }
       if (cod) {
-        var kc = normTxt(cod);
+        var kc = normCod(cod);
         if (!idx.byCod[kc]) idx.byCod[kc] = mail;
       }
       if (telDigits && telDigits.length >= 8) {
         if (!idx.byTel[telDigits]) idx.byTel[telDigits] = mail;
+        var ult10 = telDigits.slice(-10);
+        if (!idx.byTel10[ult10]) idx.byTel10[ult10] = mail;
       }
     }
     if (tablaMail) idx.dbfConMail++;
   }
 
   return idx;
+}
+
+/* ============================================================
+   APLICAR CORREOS A LOS CLIENTES + MEDIR COBERTURA
+   ============================================================ */
+function camposCliente(ck) {
+  return {
+    razF: findField(ck, ['razon', 'razonsocial', 'nombre', 'nombrecli', 'cliente', 'denominacion', 'descrip', 'descr'], null),
+    rifF: findField(ck, ['rif', 'nit', 'cedula', 'cedul', 'identif', 'identidad', 'rifc', 'cif', 'cifoi', 'cifoih', 'codrif'], null),
+    codF: findField(ck, ['cod', 'codigo', 'cod_cli', 'codcli', 'cta', 'ctacli', 'deudor', 'cliente', 'codigo_cli'], null),
+    telF: findField(ck, ['telf', 'telef', 'tel', 'tfono', 'tfn', 'movil', 'celular', 'tlf'], null),
+    mailF: findField(ck, ['corr', 'correo', 'email', 'e_mail', 'e-mail', 'nmail', 'clave', 'agenda'], null)
+  };
+}
+
+/* Devuelve { conMail, total, pct, estrategias } sin modificar filas.
+   Es RÁPIDO (solo llaves exactas) para usarlo en cada ronda. */
+function medirCobertura(rows, campos, idx) {
+  var conMail = 0;
+  var estrategias = { rif: 0, cod: 0, tel: 0, directo: 0 };
+  for (var ri = 0; ri < rows.length; ri++) {
+    var r = rows[ri];
+    var mail = '';
+
+    if (!mail && campos.codF && r[campos.codF] !== undefined) {
+      mail = idx.byCod[normCod(r[campos.codF])] || '';
+      if (mail) estrategias.cod++;
+    }
+    if (!mail && campos.rifF && r[campos.rifF] !== undefined) {
+      mail = idx.byRif[normTxt(r[campos.rifF])] || '';
+      if (mail) estrategias.rif++;
+    }
+    if (!mail && campos.telF && r[campos.telF] !== undefined) {
+      var d = String(r[campos.telF]).replace(/\D/g, '');
+      mail = idx.byTel[d] || idx.byTel10[d.slice(-10)] || '';
+      if (mail) estrategias.tel++;
+    }
+    if (!mail && campos.mailF && r[campos.mailF] !== undefined) {
+      mail = extractEmail(r[campos.mailF]);
+      if (mail) estrategias.directo++;
+    }
+
+    if (mail) conMail++;
+  }
+  return {
+    conMail: conMail,
+    total: rows.length,
+    pct: rows.length ? Math.round(conMail / rows.length * 100) : 0,
+    estrategias: estrategias
+  };
+}
+
+/* Aplica correos a las filas (escribe __email y __tiene_email).
+   Si usarFuzzy=true, incluye la razón social como último recurso. */
+function aplicarCorreos(rows, campos, idx, usarFuzzy) {
+  var conMail = 0;
+  var estrategias = { rif: 0, cod: 0, tel: 0, directo: 0, razon: 0 };
+  var sinCorreo = [];
+
+  for (var ri = 0; ri < rows.length; ri++) {
+    var r = rows[ri];
+    var raz = (campos.razF && r[campos.razF] !== undefined) ? String(r[campos.razF]) : '';
+    var rif = (campos.rifF && r[campos.rifF] !== undefined) ? String(r[campos.rifF]) : '';
+    var cod = (campos.codF && r[campos.codF] !== undefined) ? String(r[campos.codF]) : '';
+    var telR = (campos.telF && r[campos.telF] !== undefined) ? String(r[campos.telF]) : '';
+    var mail = '';
+
+    // 1) Email directo en la tabla principal (si existe)
+    if (campos.mailF && r[campos.mailF] !== undefined) {
+      mail = extractEmail(r[campos.mailF]);
+      if (mail) estrategias.directo++;
+    }
+
+    // 2) por código (llave más estable de MixNet)
+    if (!mail && cod) {
+      mail = idx.byCod[normCod(cod)] || '';
+      if (mail) estrategias.cod++;
+    }
+    // 3) por RIF
+    if (!mail && rif) {
+      mail = idx.byRif[normTxt(rif)] || '';
+      if (mail) estrategias.rif++;
+    }
+    // 4) por teléfono
+    if (!mail && telR) {
+      var d = telR.replace(/\D/g, '');
+      if (d.length >= 8) {
+        mail = idx.byTel[d] || idx.byTel10[d.slice(-10)] || '';
+        if (mail) estrategias.tel++;
+      }
+    }
+    // 5) por razón social (solo en la pasada final)
+    if (!mail && usarFuzzy && raz) {
+      var hit = fuzzyMatch(raz, idx.byRazon);
+      if (hit) {
+        mail = hit.mail || '';
+        if (mail) estrategias.razon++;
+      }
+    }
+
+    r['__email'] = mail;
+    r['__tiene_email'] = mail ? 'SI' : 'NO';
+    if (mail) {
+      conMail++;
+    } else {
+      sinCorreo.push({
+        cod: cod,
+        raz: raz,
+        rif: rif,
+        tel: telR,
+        dir: (campos.razF && r[campos.razF]) ? '' : ''
+      });
+    }
+  }
+
+  return {
+    rows: rows,
+    conMail: conMail,
+    total: rows.length,
+    pct: rows.length ? Math.round(conMail / rows.length * 100) : 0,
+    estrategias: estrategias,
+    sinCorreo: sinCorreo,
+    idx: idx
+  };
 }
 
 /* ============================================================
@@ -567,7 +755,7 @@ function resolveOutPath(outF) {
   }
   desks.push('C:\\Users\\Public\\Desktop');
 
-  var nombre = outF || ('clientes_mixnet_completo_' + Date.now() + '.csv');
+  var nombre = outF || ('clientes_mixnet_' + Date.now() + '.csv');
 
   for (var i = 0; i < desks.length; i++) {
     try {
@@ -579,10 +767,247 @@ function resolveOutPath(outF) {
   return path.join(__dirname, nombre);
 }
 
+/* esc+rv3 funciona igual que resolveOutPath pero para fechas. */
+function stFecha() {
+  var d = new Date();
+  var p = function (n) { return String(n).padStart(2, '0'); };
+  return '' + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '_' + p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds());
+}
+
+function escribirCSV(rows, head, outPath) {
+  try {
+    fs.writeFileSync(outPath, toCSV(rows, head), 'utf8');
+    return true;
+  } catch (e) {
+    log('[ERROR] No se pudo escribir el CSV: ' + e.message);
+    return false;
+  }
+}
+
+/* ============================================================
+   MODO COMPLETO — Flujo automático completo (v3)
+   ============================================================ */
+function modoCompleto(opts) {
+  var objetivo = opts.objetivo || 60;
+  var presupuestoMs = (opts.tiempo || 300) * 1000;
+  var outF = opts.out || null;
+
+  var t0 = Date.now();
+  var finT = t0 + presupuestoMs;
+  log('=========================================================');
+  log('  EXTRACTOR COMPLETO DE CLIENTES MIXNET v3');
+  log('  Solo lee. No modifica nada de MixNet.');
+  log('  Objetivo de correos: ' + objetivo + '%  Presupuesto: ' +
+    Math.round(presupuestoMs / 1000) + 's');
+  log('=========================================================');
+
+  // PASO 1: Detectar unidades
+  log('\n[PASO 1/6] Detectando unidades de la red...');
+  var unidades = detectarUnidades();
+  if (!unidades.length) {
+    log('\n[ERROR FATAL] No hay ninguna unidad accesible.');
+    log('  ¿Está la red conectada? ¿Las unidades están montadas?');
+    log('  Prueba: Abre el Explorador de Windows y verifica M:/ P:/ Z:/');
+    var outErr = resolveOutPath(outF);
+    try {
+      fs.writeFileSync(outErr,
+        'RESULTADO,EXTRAER-CLIENTES-MIXNET\r\n' +
+        'ESTADO,ERROR_NO_HAY_UNIDADES\r\n' +
+        'MOTIVO,No se pudo acceder a ninguna unidad de red ni local\r\n' +
+        'FECHA,' + new Date().toLocaleString() + '\r\n', 'utf8');
+      log('  Reporte de error en: ' + outErr);
+    } catch (_) { }
+    return;
+  }
+
+  // PASO 2: Buscar compañía (MXCTACLI) — máximo 60s (~1/5 del presupuesto)
+  log('\n[PASO 2/6] Buscando la tabla de clientes (MXCTACLI)...');
+  var comps = buscarMxctacli(unidades, Math.min(60000, Math.round(presupuestoMs / 3)));
+  if (!comps.length) {
+    log('\n[ERROR] No encontré MXCTACLI.DBF en ninguna ruta típica ni en la red.');
+    log('  Ejecuta --explorar para ver qué archivos DBF existen.');
+    var outErr2 = resolveOutPath(outF);
+    try {
+      fs.writeFileSync(outErr2,
+        'RESULTADO,EXTRAER-CLIENTES-MIXNET\r\n' +
+        'ESTADO,ERROR_NO_HAY_MXCTACLI\r\n' +
+        'MOTIVO,No se encontro MXCTACLI.DBF en ninguna unidad\r\n' +
+        'UNIDADES,' + unidades.map(function (u) { return u.letra; }).join(';') + '\r\n' +
+        'AYUDA,Usa --explorar para ver que archivos DBF existen\r\n' +
+        'FECHA,' + new Date().toLocaleString() + '\r\n', 'utf8');
+      log('  Reporte de error en: ' + outErr2);
+    } catch (_) { }
+    return;
+  }
+
+  log('\nCompañías encontradas (' + comps.length + '):');
+  for (var ci = 0; ci < comps.length; ci++) {
+    log('  ' + (ci + 1) + ') ' + comps[ci].path + ' | ' + comps[ci].regs + ' registros');
+  }
+  var best = comps[0];
+  log('\n  -> Usando: ' + best.path);
+
+  // PASO 3: Leer todos los clientes
+  log('\n[PASO 3/6] Leyendo todos los clientes de la tabla principal...');
+  var cdb = parsedb(best.path, true, true);
+  if (!cdb || !cdb.rows || !cdb.rows.length) {
+    log('[ERROR] No se pudieron leer registros de MXCTACLI.');
+    return;
+  }
+
+  var rows = cdb.rows;
+  var ck = [];
+  for (var fi = 0; fi < cdb.fields.length; fi++) {
+    ck.push(cdb.fields[fi].name.trim().toLowerCase());
+  }
+  log('  Clientes: ' + rows.length);
+  log('  Campos: ' + ck.join(', '));
+
+  // Enriquecer filas con llaves vacías
+  for (var pi = 0; pi < rows.length; pi++) {
+    rows[pi]['__email'] = '';
+    rows[pi]['__tiene_email'] = 'NO';
+  }
+
+  // PASO 3.5: ESCRIBIR EL CSV AHORA (garantizado)
+  var stamp = stFecha();
+  var base = (outF || 'clientes_mixnet_' + stamp);
+  var ext = (base.slice(-4).toLowerCase() === '.csv') ? '' : '.csv';
+  var mainPath = resolveOutPath(base + ext);
+  var head = ck.slice();
+  head.push('__email', '__tiene_email');
+
+  log('\n  Escribiendo CSV de clientes en ' + mainPath + ' ...');
+  escribirCSV(rows, head, mainPath);
+  log('  [CSV BASE GUARDADO] ' + mainPath + ' (' + rows.length + ' clientes)');
+
+  var campos = camposCliente(ck);
+  log('  Campos de cruce: razón=' + (campos.razF || '?') + ', RIF=' + (campos.rifF || '?') +
+    ', código=' + (campos.codF || '?') + ', teléfono=' + (campos.telF || '?') +
+    ', correo=' + (campos.mailF || '?'));
+
+  // PASO 4: Escanear y buscar correos con presupuesto + cobertura
+  log('\n[PASO 4/6] Buscando correos en TODAS las unidades (priorizando MixNet)...');
+  var esc = crearEscaneador(unidades);
+  var dbFilesAll = [cdb]; // el propio MXCTACLI también cuenta (emailngq directo)
+  var idx = buildEmailIndex(dbFilesAll);
+  var mejor = medirCobertura(rows, campos, idx);
+  log('  Cobertura inicial (solo MXCTACLI): ' + mejor.conMail + '/' + rows.length +
+    ' (' + mejor.pct + '%)');
+
+  var ronda = 0;
+  while (esc.hayPendientes() && Date.now() < finT) {
+    ronda++;
+    log('\n  --- Ronda ' + ronda + ' de escaneo (carpetas pendientes: ' + esc.pendientes() + ') ---');
+
+    var nuevos = esc.recorrer(4000);
+    if (nuevos.length) {
+      dbFilesAll = dbFilesAll.concat(nuevos);
+      var idxNuevo = buildEmailIndex(dbFilesAll);
+      var cob = medirCobertura(rows, campos, idxNuevo);
+
+      log('  DBF con datos nuevos: ' + nuevos.length +
+        ' | DBF con email: ' + idxNuevo.dbfConMail +
+        ' | emails por valor: ' + idxNuevo.rows.length);
+      log('  Cobertura AHORA: ' + cob.conMail + '/' + rows.length + ' (' + cob.pct + '%)' +
+        '  (objetivo ' + objetivo + '%)');
+
+      // Reescribir CSV incremental con los correos encontrados (no fuzzy aún)
+      aplicarCorreos(rows, campos, idxNuevo, false);
+      escribirCSV(rows, head, mainPath);
+      log('  CSV actualizado: ' + mainPath);
+
+      idx = idxNuevo;
+      mejor = cob;
+
+      if (cob.pct >= objetivo) {
+        log('\n  >>> OBJETIVO ALCANZADO: ' + cob.pct + '% >= ' + objetivo + '% <<<');
+        break;
+      }
+    }
+
+    // El CSV ya quedó con los correos de esta ronda aunque no se alcance el objetivo
+  }
+
+  var totalT = Math.round((Date.now() - t0) / 1000);
+  log('\n  Escaneo finalizado en ' + totalT + 's. Carpetas: ' + esc.stats.carpetas +
+    ', DBF: ' + esc.stats.dbfEncontrados + ', con email: ' + esc.stats.conEmail);
+
+  // PASO 5: Pasada final incluyendo fuzzy por razón social
+  log('\n[PASO 5/6] Pasada final (incluye razón social)...');
+  var res = aplicarCorreos(rows, campos, idx, true);
+  log('  Resultado final: ' + res.conMail + '/' + rows.length + ' con correo (' + res.pct + '%)');
+  log('    Por código:    ' + res.estrategias.cod);
+  log('    Por RIF:       ' + res.estrategias.rif);
+  log('    Por teléfono:  ' + res.estrategias.tel);
+  log('    Directo tabla: ' + res.estrategias.directo);
+  log('    Por razón:     ' + res.estrategias.razon);
+
+  // PASO 6: Escribir CSV final + reportes
+  log('\n[PASO 6/6] Escribiendo archivos finales...');
+  escribirCSV(rows, head, mainPath);
+
+  // Reporte de clientes sin correo
+  var sinPath = resolveOutPath('clientes_sin_correo_' + stamp + '.csv');
+  var sinHead = ['CODIGO', 'RAZON_SOCIAL', 'RIF', 'TELEFONO'];
+  var sinLines = [sinHead.join(',')];
+  for (var si = 0; si < res.sinCorreo.length; si++) {
+    var s = res.sinCorreo[si];
+    sinLines.push([s.cod, s.raz, s.rif, s.tel].map(escCSV).join(','));
+  }
+  try {
+    fs.writeFileSync(sinPath, sinLines.join('\r\n'), 'utf8');
+    log('  Sin correo (' + res.sinCorreo.length + '): ' + sinPath);
+  } catch (e) {
+    log('  No se pudo escribir reporte sin correo: ' + e.message);
+  }
+
+  // Resumen
+  var resPath = resolveOutPath('resumen_mixnet_' + stamp + '.csv');
+  var resLines = [
+    'METRICA,VALOR',
+    'CLIENTES_TOTAL,' + rows.length,
+    'CLIENTES_CON_CORREO,' + res.conMail,
+    'COBERTURA_PCT,' + res.pct,
+    'OBJETIVO_PCT,' + objetivo,
+    'PRESUPUESTO_SEG,' + Math.round(presupuestoMs / 1000),
+    'TIEMPO_TOTAL_SEG,' + totalT,
+    'CARPETAS_ESCANEADAS,' + esc.stats.carpetas,
+    'DBF_ENCONTRADOS,' + esc.stats.dbfEncontrados,
+    'DBF_CON_EMAIL,' + esc.stats.conEmail,
+    'EMAILS_POR_VALOR,' + idx.rows.length,
+    'POR_CODIGO,' + res.estrategias.cod,
+    'POR_RIF,' + res.estrategias.rif,
+    'POR_TELEFONO,' + res.estrategias.tel,
+    'DIRECTO_TABLA,' + res.estrategias.directo,
+    'POR_RAZON,' + res.estrategias.razon,
+    'SIN_CORREO,' + res.sinCorreo.length,
+    'ARCHIVO_CLIENTES,' + mainPath,
+    'ARCHIVO_SIN_CORREO,' + sinPath
+  ];
+  try {
+    fs.writeFileSync(resPath, resLines.join('\r\n'), 'utf8');
+    log('  Resumen: ' + resPath);
+  } catch (e) {
+    log('  No se pudo escribir resumen: ' + e.message);
+  }
+
+  var elapsed = Math.round((Date.now() - t0) / 1000);
+  log('\n=========================================================');
+  log('  TERMINADO EN ' + elapsed + ' SEGUNDOS');
+  log('=========================================================');
+  log('  ARCHIVO PRINCIPAL: ' + mainPath);
+  log('  ' + rows.length + ' clientes extraidos');
+  log('  ' + res.conMail + ' con correo (' + res.pct + '%)');
+  log('=========================================================');
+}
+
 /* ============================================================
    MODO EXPLORAR — Lista TODO lo que encuentra (sin extraer)
    ============================================================ */
-function modoExplorar() {
+function modoExplorar(opts) {
+  var presupuestoMs = (opts.tiempo || 300) * 1000;
+  var t0 = Date.now();
   log('=========================================================');
   log('  MODO EXPLORAR — ¿Qué hay en esta PC?');
   log('=========================================================');
@@ -593,9 +1018,9 @@ function modoExplorar() {
     return;
   }
 
-  // Buscar MXCTACLI
+  // Buscar MXCTACLI (usar la mitad del presupuesto para no agotarlo todo aquí)
   log('\n--- Buscando MXCTACLI (clientes) ---');
-  var comps = buscarMxctacli(unidades);
+  var comps = buscarMxctacli(unidades, Math.round(presupuestoMs / 2));
   if (comps.length) {
     log('\nCompañías encontradas:');
     for (var i = 0; i < comps.length; i++) {
@@ -603,48 +1028,44 @@ function modoExplorar() {
         (comps[i].size / 1024).toFixed(0) + ' KB)');
     }
   } else {
-    log('No se encontró MXCTACLI.DBF en rutas típicas.');
+    log('No se encontró MXCTACLI.DBF en rutas típicas (sin escaneo profundo en explorar).');
   }
 
-  // Escanear todos los DBF
-  log('\n--- Escaneando TODOS los archivos DBF ---');
-  var resultado = buscarEmailsEnTodos(unidades, true);
+  // Escanear todos los DBF con presupuesto
+  log('\n--- Escaneando TODOS los archivos DBF (presupuesto ' +
+    Math.round(presupuestoMs / 1000) + 's) ---');
+  var esc = crearEscaneador(unidades);
+
+  try {
+    while (esc.hayPendientes() && Date.now() - t0 < presupuestoMs) {
+      esc.recorrer(4000);
+    }
+  } catch (e) {
+    log('  Error durante escaneo: ' + e.message);
+  }
 
   // Resumen
   log('\n=========================================================');
   log('  RESUMEN DEL EXPLORADOR');
   log('=========================================================');
   log('  Unidades accesibles: ' + unidades.length);
-  log('  Archivos DBF encontrados: ' + resultado.stats.dbfEncontrados);
-  log('  DBF con emails: ' + resultado.stats.conEmail);
-  log('  Carpetas recorridas: ' + resultado.stats.carpetas);
-  log('  Errores de acceso: ' + resultado.stats.errores);
+  log('  Archivos DBF encontrados: ' + esc.stats.dbfEncontrados);
+  log('  DBF con emails: ' + esc.stats.conEmail);
+  log('  Carpetas recorridas: ' + esc.stats.carpetas);
+  log('  Errores de acceso: ' + esc.stats.errores);
+  log('  Tiempo: ' + Math.round((Date.now() - t0) / 1000) + 's');
 
-  // Construir índice y mostrar ejemplos
-  if (resultado.dbFiles.length > 0) {
-    var idx = buildEmailIndex(resultado.dbFiles);
-    log('\n  Emails encontrados por valor: ' + idx.rows.length);
-    log('  DBF que contienen emails: ' + idx.dbfConMail);
-
-    if (idx.ejemplos.length > 0) {
-      log('\n  Primeros emails encontrados:');
-      for (var ei = 0; ei < idx.ejemplos.length; ei++) {
-        var ex = idx.ejemplos[ei];
-        log('    ' + ex.email + ' | ' + ex.razon + ' | RIF: ' + ex.rif + ' | archivo: ' + ex.archivo);
-      }
-    }
-  }
-
-  // Guardar reporte detallado
-  var reportePath = resolveOutPath('exploracion_mixnet_' + Date.now() + '.csv');
-  var reporteLines = ['ARCHIVO,REGISTROS,CON_EMAIL,CAMPOS'];
-  for (var ri = 0; ri < resultado.dbFiles.length; ri++) {
-    var df = resultado.dbFiles[ri];
+  // Reporte siempre al final
+  var stamp = stFecha();
+  var reportePath = resolveOutPath('exploracion_mixnet_' + stamp + '.csv');
+  var reporteLines = ['ARCHIVO,REGISTROS,CAMPOS,TAMANO_KB'];
+  for (var ri = 0; ri < esc.meta.length; ri++) {
+    var m = esc.meta[ri];
     reporteLines.push(
-      escCSV(df.filePath) + ',' +
-      df.rows.length + ',' +
-      (df.tieneEmail ? 'SI' : 'NO') + ',' +
-      escCSV(df.fields.map(function (f) { return f.name.trim().toLowerCase(); }).join(';'))
+      escCSV(m.path) + ',' +
+      m.regs + ',' +
+      escCSV((m.campos || []).join(';')) + ',' +
+      Math.round((m.size || 0) / 1024)
     );
   }
   try {
@@ -697,7 +1118,8 @@ function modoDiagnostico(baseDir) {
         var n = fld.name.toLowerCase();
         if (n.indexOf('cor') !== -1 || n.indexOf('mail') !== -1 || n.indexOf('email') !== -1) marker += ' <<< EMAIL';
         if (n.indexOf('tel') !== -1 || n.indexOf('tlf') !== -1) marker += ' <<< TEL';
-        if (n.indexOf('rif') !== -1 || n.indexOf('nit') !== -1) marker += ' <<< RIF';
+        if (n.indexOf('rif') !== -1 || n.indexOf('nit') !== -1 || n.indexOf('cif') !== -1) marker += ' <<< RIF';
+        if (n.indexOf('cod') !== -1) marker += ' <<< COD';
         log('        ' + String(fi + 1).padStart(2) + '. ' + fld.name + ' [' + fld.type + ' ' + fld.len + ']' + marker);
       }
     }
@@ -709,6 +1131,8 @@ function modoDiagnostico(baseDir) {
   try { entries = fs.readdirSync(baseDir); } catch (e) { log('  Error: ' + e.message); return; }
 
   var totalEmails = 0;
+  var reportePath = resolveOutPath('diagnostico_' + stFecha() + '.csv');
+  var repLines = ['ARCHIVO,REGISTROS,CON_EMAIL,CAMPOS'];
   for (var ei = 0; ei < entries.length; ei++) {
     if (!/\.dbf$/i.test(entries[ei])) continue;
     var fp2 = path.join(baseDir, entries[ei]);
@@ -727,192 +1151,19 @@ function modoDiagnostico(baseDir) {
         if (extractEmail(row[keys[ki]])) { mails++; break; }
       }
     }
+    repLines.push(escCSV(fp2) + ',' + db2.rows.length + ',' + mails + ',' +
+      escCSV(db2.fields.map(function (f) { return f.name.trim().toLowerCase(); }).join(';')));
     if (mails > 0) {
       log('  [EMAIL] ' + entries[ei] + ': ' + mails + ' registros con email (de ' + db2.rows.length + ' total)');
       totalEmails += mails;
     }
   }
-  log('\n  Total emails encontrados por valor: ' + totalEmails);
-}
-
-/* ============================================================
-   MODO COMPLETO — Flujo automático completo
-   ============================================================ */
-function modoCompleto(outF) {
-  var t0 = Date.now();
-  log('=========================================================');
-  log('  EXTRACTOR COMPLETO DE CLIENTES MIXNET');
-  log('  Solo lee. No modifica nada.');
-  log('=========================================================');
-
-  // PASO 1: Detectar unidades
-  log('\n[PASO 1/6] Detectando unidades de la red...');
-  var unidades = detectarUnidades();
-  if (!unidades.length) {
-    log('\n[ERROR FATAL] No hay ninguna unidad accesible.');
-    log('  ¿Está la red conectada? ¿Las unidades están montadas?');
-    log('  Prueba: Abre el Explorador de Windows y verifica M:/ P:/ Z:/');
-    var outErr = resolveOutPath(outF);
-    try {
-      fs.writeFileSync(outErr,
-        'RESULTADO,EXTRAER-CLIENTES-MIXNET\r\n' +
-        'ESTADO,ERROR_NO_HAY_UNIDADES\r\n' +
-        'MOTIVO,No se pudo acceder a ninguna unidad de red ni local\r\n' +
-        'FECHA,' + new Date().toLocaleString() + '\r\n', 'utf8');
-      log('  Reporte de error en: ' + outErr);
-    } catch (_) { }
-    return;
-  }
-
-  // PASO 2: Buscar compañía (MXCTACLI)
-  log('\n[PASO 2/6] Buscando la tabla de clientes (MXCTACLI)...');
-  var comps = buscarMxctacli(unidades);
-  if (!comps.length) {
-    log('\n[ERROR] No encontré MXCTACLI.DBF en ninguna ruta típica.');
-    log('  Intentando escaneo profundo de todas las unidades...');
-    // Si no encontró en rutas típicas, el escaneo profundo ya se hizo
-    // Si aún nada, reportar
-    var outErr2 = resolveOutPath(outF);
-    try {
-      fs.writeFileSync(outErr2,
-        'RESULTADO,EXTRAER-CLIENTES-MIXNET\r\n' +
-        'ESTADO,ERROR_NO_HAY_MXCTACLI\r\n' +
-        'MOTIVO,No se encontro MXCTACLI.DBF en ninguna unidad\r\n' +
-        'UNIDADES,' + unidades.map(function (u) { return u.letra; }).join(';') + '\r\n' +
-        'AYUDA,Usa --explorar para ver que archivos DBF existen\r\n' +
-        'FECHA,' + new Date().toLocaleString() + '\r\n', 'utf8');
-      log('  Reporte de error en: ' + outErr2);
-      log('  Ejecuta: node extraer-clientes-mixnet.cjs --explorar');
-      log('  para ver qué archivos DBF hay en las unidades.');
-    } catch (_) { }
-    return;
-  }
-
-  log('\nCompañías encontradas (' + comps.length + '):');
-  for (var ci = 0; ci < comps.length; ci++) {
-    log('  ' + (ci + 1) + ') ' + comps[ci].path + ' | ' + comps[ci].regs + ' registros');
-  }
-  var best = comps[0];
-  log('\n  -> Usando: ' + best.path);
-
-  // PASO 3: Leer todos los clientes
-  log('\n[PASO 3/6] Leyendo todos los clientes de la tabla principal...');
-  var cdb = parsedb(best.path, true, true);
-  if (!cdb || !cdb.rows || !cdb.rows.length) {
-    log('[ERROR] No se pudieron leer registros de MXCTACLI.');
-    return;
-  }
-
-  var rows = cdb.rows;
-  var ck = [];
-  for (var fi = 0; fi < cdb.fields.length; fi++) {
-    ck.push(cdb.fields[fi].name.trim().toLowerCase());
-  }
-  log('  Clientes: ' + rows.length);
-  log('  Campos: ' + ck.join(', '));
-
-  // PASO 4: Buscar emails en TODOS los DBF de TODAS las unidades
-  log('\n[PASO 4/6] Escaneando todas las unidades buscando emails...');
-  var resultado = buscarEmailsEnTodos(unidades, true);
-
-  log('\nConstruyendo índice de correos...');
-  var idx = buildEmailIndex(resultado.dbFiles);
-  log('  Tablas con correo: ' + idx.dbfConMail);
-  log('  Emails encontrados por valor: ' + idx.rows.length);
-
-  if (idx.ejemplos.length > 0) {
-    log('\n  Ejemplos de emails encontrados:');
-    for (var ei = 0; ei < Math.min(10, idx.ejemplos.length); ei++) {
-      log('    ' + idx.ejemplos[ei].email + ' | ' + idx.ejemplos[ei].razon);
-    }
-  }
-
-  // PASO 5: Cruzar correos con clientes
-  log('\n[PASO 5/6] Cruzando cada correo con su cliente...');
-  var razF = findField(ck, ['razon', 'razonsocial', 'nombre', 'nombrecli', 'cliente', 'denominacion', 'descrip'], null);
-  var rifF = findField(ck, ['rif', 'nit', 'cedula', 'cedul', 'identif', 'identidad', 'rifc'], null);
-  var codF = findField(ck, ['cod', 'codigo', 'cod_cli', 'codcli', 'cta', 'ctacli', 'deudor', 'cliente'], null);
-  var telF = findField(ck, ['telf', 'telef', 'tel', 'tfono', 'tfn', 'movil', 'celular', 'tlf'], null);
-
-  log('  Campos de cruce: razón=' + (razF || '?') + ', RIF=' + (rifF || '?') +
-    ', código=' + (codF || '?') + ', teléfono=' + (telF || '?'));
-
-  var conMail = 0;
-  var estrategias = { rif: 0, cod: 0, tel: 0, razon: 0 };
-
-  for (var ri = 0; ri < rows.length; ri++) {
-    var r = rows[ri];
-    var raz = (razF && r[razF] !== undefined) ? String(r[razF]) : '';
-    var rif = (rifF && r[rifF] !== undefined) ? String(r[rifF]) : '';
-    var cod = (codF && r[codF] !== undefined) ? String(r[codF]) : '';
-    var telR = (telF && r[telF] !== undefined) ? String(r[telF]) : '';
-    var mail = '';
-
-    // 1) por RIF
-    if (!mail && rif) {
-      mail = idx.byRif[normTxt(rif)] || '';
-      if (mail) estrategias.rif++;
-    }
-    // 2) por código
-    if (!mail && cod) {
-      mail = idx.byCod[normTxt(cod)] || '';
-      if (mail) estrategias.cod++;
-    }
-    // 3) por teléfono
-    if (!mail && telR) {
-      var d = telR.replace(/\D/g, '');
-      if (d.length >= 8) {
-        mail = idx.byTel[d] || '';
-        if (mail) estrategias.tel++;
-      }
-    }
-    // 4) por razón social (fuzzy)
-    if (!mail && raz) {
-      var hit = fuzzyMatch(raz, idx.byRazon);
-      if (hit) {
-        mail = hit.mail || '';
-        if (mail) estrategias.razon++;
-      }
-    }
-
-    if (mail) conMail++;
-    r['__email'] = mail;
-    r['__tiene_email'] = mail ? 'SI' : 'NO';
-  }
-
-  log('\n  Resultado del cruce:');
-  log('    Por RIF:       ' + estrategias.rif);
-  log('    Por código:    ' + estrategias.cod);
-  log('    Por teléfono:  ' + estrategias.tel);
-  log('    Por razón:     ' + estrategias.razon);
-  log('    TOTAL con correo: ' + conMail + ' de ' + rows.length +
-    ' (' + (rows.length ? Math.round(conMail / rows.length * 100) : 0) + '%)');
-
-  // PASO 6: Generar CSV
-  log('\n[PASO 6/6] Generando archivo CSV...');
-  var head = ck.slice();
-  if (head.indexOf('__email') === -1) head.push('__email');
-  if (head.indexOf('__tiene_email') === -1) head.push('__tiene_email');
-
-  var outPath = resolveOutPath(outF);
   try {
-    fs.writeFileSync(outPath, toCSV(rows, head), 'utf8');
-  } catch (e) {
-    log('[ERROR] No se pudo escribir el CSV: ' + e.message);
-    log('  Intentando guardar junto al script...');
-    outPath = path.join(__dirname, outF || ('clientes_mixnet_' + Date.now() + '.csv'));
-    fs.writeFileSync(outPath, toCSV(rows, head), 'utf8');
-  }
+    fs.writeFileSync(reportePath, repLines.join('\r\n'), 'utf8');
+    log('  Reporte diagnóstico: ' + reportePath);
+  } catch (e) { log('  No se pudo escribir reporte: ' + e.message); }
 
-  var elapsed = Math.round((Date.now() - t0) / 1000);
-  log('\n=========================================================');
-  log('  TERMINADO EN ' + elapsed + ' SEGUNDOS');
-  log('=========================================================');
-  log('  ARCHIVO: ' + outPath);
-  log('  ' + rows.length + ' clientes extraidos');
-  log('  ' + conMail + ' con correo (' +
-    (rows.length ? Math.round(conMail / rows.length * 100) : 0) + '%)');
-  log('=========================================================');
+  log('\n  Total emails encontrados por valor: ' + totalEmails);
 }
 
 /* ============================================================
@@ -938,40 +1189,52 @@ function modoEsquema(filePath) {
 function main() {
   var args = process.argv.slice(2);
 
-  // Sin argumentos: flujo completo automático
-  if (args.length === 0) {
+  // Parámetros
+  var objetivo = 60;
+  var tiempo = 300;
+  var out = null;
+  var modos = [];
+
+  for (var i = 0; i < args.length; i++) {
+    var a = args[i];
+    if (a === '--objetivo') { objetivo = parseInt(args[i + 1], 10) || 60; i++; }
+    else if (a === '--tiempo') { tiempo = parseInt(args[i + 1], 10) || 300; i++; }
+    else if (a === '--out') { out = args[i + 1]; i++; }
+    else modos.push(a);
+  }
+
+  var opts = { objetivo: objetivo, tiempo: tiempo, out: out };
+
+  // Sin modos: flujo completo automático
+  if (modos.length === 0) {
     log('=========================================================');
-    log('  EXTRACTOR DE CLIENTES MIXNET (automático)');
-    log('  Sin comandos: ejecutando flujo completo.');
-    log('  Para ver qué hay antes: --explorar');
+    log('  EXTRACTOR DE CLIENTES MIXNET v3 (automático)');
+    log('  Objetivo de correos: ' + objetivo + '%');
     log('=========================================================');
-    modoCompleto(null);
+    modoCompleto(opts);
     return;
   }
 
-  // Con argumentos
-  var mode = args[0];
+  var mode = modos[0];
 
   if (mode === '--explorar' || mode === '--explore') {
-    modoExplorar();
+    modoExplorar(opts);
     return;
   }
 
   if (mode === '--diagnostico' || mode === '--diag') {
-    var base = args[1] || 'M:\\comp01';
+    var base = modos[1] || 'M:\\comp01';
     modoDiagnostico(base);
     return;
   }
 
   if (mode === '--completo' || mode === '--escaneo') {
-    var outI = args.indexOf('--out');
-    var outF = outI >= 0 ? args[outI + 1] : null;
-    modoCompleto(outF);
+    modoCompleto(opts);
     return;
   }
 
   if (mode === '--esquema') {
-    var f = args[1];
+    var f = modos[1];
     if (!f) { log('Falta la ruta. Ej: --esquema "M:\\comp01\\MXCTACLI.DBF"'); return; }
     modoEsquema(f);
     return;
@@ -984,17 +1247,19 @@ function main() {
 
   // Modo desconocido
   log('=========================================================');
-  log('  EXTRACTOR DE CLIENTES MIXNET v2');
+  log('  EXTRACTOR DE CLIENTES MIXNET v3');
   log('=========================================================');
   log('');
   log('  USO RECOMENDADO:');
-  log('    node extraer-clientes-mixnet.cjs                 Flujo completo');
-  log('    node extraer-clientes-mixnet.cjs --explorar      VER qué hay en la PC');
-  log('    node extraer-clientes-mixnet.cjs --diagnostico   Ver emails en una carpeta');
+  log('    node extraer-clientes-mixnet.cjs                       Flujo completo');
+  log('    node extraer-clientes-mixnet.cjs --objetivo 75 --tiempo 600');
+  log('                                    Sube a 75% de cobertura o 10 min');
+  log('    node extraer-clientes-mixnet.cjs --explorar            VER qué hay en la PC');
+  log('    node extraer-clientes-mixnet.cjs --diagnostico "RUTA"  Ver emails en una carpeta');
   log('');
   log('  OTROS:');
   log('    --esquema "RUTA\\ARCHIVO.DBF"   Ver campos de un DBF');
-  log('    --detectar                       Ver unidades accesibles');
+  log('    --detectar                     Ver unidades accesibles');
 }
 
 /* ============================================================

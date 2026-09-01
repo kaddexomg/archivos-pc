@@ -1,19 +1,19 @@
 @echo off
 chcp 65001 >nul 2>nul
-title JJ Paper - Extraer CLIENTES de MixNet
+title JJ Paper - Extraer INVENTARIO de MixNet
 color 0F
 
 echo.
 echo ========================================================
-echo    EXTRACTOR DE CLIENTES MIXNET v3  (solo lectura)
+echo    EXTRACTOR DE INVENTARIO MIXNET  (solo lectura)
 echo ========================================================
 echo.
 echo  Este script SOLO LEE. No modifica nada de MixNet.
-echo  Siempre genera el CSV de clientes, y va buscando
-echo  correos hasta 70% de cobertura (o 10 min maximo).
+echo  Auto-detecta tablas de artículos, precios, stock,
+echo  familias y proveedores por nombre de campo.
 echo.
 
-REM 1) Buscar Node.js
+REM Buscar Node.js
 echo  Buscando Node.js...
 echo.
 
@@ -45,7 +45,6 @@ for %%p in (
 if defined NODE goto FOUND
 
 echo  No esta en rutas comunes. Buscando en C:\...
-echo  (Esto puede tardar 1-2 minutos, no cierres esta ventana)
 for /f "delims=" %%f in ('where /R "C:\" node.exe 2^>nul') do (
   set "NODE=%%f"
   goto FOUND
@@ -55,10 +54,6 @@ echo.
 echo  ============================================
 echo   [ERROR] No se encontro Node.js
 echo  ============================================
-echo.
-echo  Necesitas Node.js v13 o superior.
-echo  Descarga desde: https://nodejs.org/
-echo  Instala con opciones por defecto, reinicia, y vuelve a probar.
 echo.
 pause
 exit /b 1
@@ -72,8 +67,8 @@ echo ========================================================
 echo   QUE QUIERES HACER?
 echo ========================================================
 echo.
-echo   1.  EXTRAER clientes (flujo completo automatico)
-echo   2.  EXPLORAR primero (VER que hay en esta PC)
+echo   1.  EXTRAER inventario (flujo completo, busca precios/stock)
+echo   2.  EXPLORAR primero (VER qué tablas de inventario hay)
 echo   3.  DIAGNOSTICAR una carpeta especifica
 echo.
 echo ========================================================
@@ -91,36 +86,34 @@ goto MENU
 :EXTRAER
 echo.
 echo ========================================================
-echo   EXTRAYENDO TODOS LOS CLIENTES...
+echo   EXTRAYENDO INVENTARIO...
 echo ========================================================
 echo.
-echo  Objetivo de correos: 70%
-echo  Tiempo maximo: 10 minutos (el CSV se va guardando solo)
-echo  Puedes cerrar DESPUES de que diga "TERMINADO".
+echo  Esto buscara tablas de artículos/precios/stock en
+echo  todas las unidades. El CSV se genera de inmediato
+echo  y se va enriqueciendo cada ronda (hasta 85% o 10 min).
 echo.
-for /f "tokens=1-3 delims=/ " %%a in ('date /t') do set "DD=%%c%%a%%b"
-for /f "tokens=1-2 delims=:" %%a in ('time /t') do set "HH=%%a%%b"
-set "OUT=clientes_mixnet_%DD%_%HH%.csv"
-echo  Archivo de salida: %OUT%
-echo.
-echo  Esto puede tardar varios minutos (escanea todas las unidades
-echo  buscando correos, priorizando carpetas MixNet).
 echo  NO cierres esta ventana. Espera a que diga "TERMINADO".
 echo.
 echo --------------------------------------------------------
 echo.
-"%NODE%" "%~dp0extraer-clientes-mixnet.cjs" --completo --out "%OUT%" --objetivo 70 --tiempo 600
+for /f "tokens=1-3 delims=/ " %%a in ('date /t') do set "DD=%%c%%a%%b"
+for /f "tokens=1-2 delims=:" %%a in ('time /t') do set "HH=%%a%%b"
+set "OUT=inventario_mixnet_%DD%_%HH%.csv"
+echo  Archivo de salida: %OUT%
+echo.
+"%NODE%" "%~dp0extraer-inventario-mixnet.cjs" --completo --out "%OUT%" --objetivo 85 --tiempo 600
 goto FIN
 
 :EXPLORAR
 echo.
 echo ========================================================
-echo   EXPLORANDO QUE HAY EN ESTA PC...
+echo   EXPLORANDO TABLAS DE INVENTARIO...
 echo ========================================================
 echo.
 echo  Esto puede tardar varios minutos.
 echo.
-"%NODE%" "%~dp0extraer-clientes-mixnet.cjs" --explorar
+"%NODE%" "%~dp0extraer-inventario-mixnet.cjs" --explorar --tiempo 120
 goto FIN
 
 :DIAGNOSTICO
@@ -131,14 +124,18 @@ echo  (Si no sabes, elige opcion 2 "EXPLORAR" primero)
 echo.
 set /p "RUTA=Ruta: "
 echo.
-"%NODE%" "%~dp0extraer-clientes-mixnet.cjs" --diagnostico "%RUTA%"
+"%NODE%" "%~dp0extraer-inventario-mixnet.cjs" --diagnostico "%RUTA%"
 goto FIN
 
 :FIN
 echo.
 echo ========================================================
 echo   PROCESO TERMINADO.
-echo   Si genero un archivo, revisa tu ESCRITORIO.
+echo   Revisa tu ESCRITORIO para los archivos generados:
+echo     - inventario_mixnet_*.csv        (inventario completo)
+echo     - inventario_sin_precio_*.csv    (sin precio)
+echo     - resumen_inventario_*.csv       (cobertura)
+echo     - exploracion_inventario_*.csv   (tablas encontradas)
 echo ========================================================
 echo.
 echo  Presiona cualquier tecla para cerrar...

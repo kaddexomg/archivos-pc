@@ -1,67 +1,83 @@
-COMO USAR EL EXTRACTOR DE CLIENTES MIXNET (v2)
-================================================
+EXTRACTORES JJ PAPER PARA LA OTRA PC (Windows 7 con MixNet)
+================================================================
 
-1) COPIAR ESTOS 2 ARCHIVOS A LA OTRA PC (la Windows 7 de la tienda,
-   la que tiene las unidades M:, P:, Z: y las carpetas C:\RESPAMIX):
+ARCHIVOS A COPIAR AL ESCRITORIO DE LA OTRA PC:
+  - extraer-clientes-mixnet.cjs
+  - extraer-clientes-mixnet.bat
+  - extraer-inventario-mixnet.cjs
+  - extraer-inventario-mixnet.bat
 
-   - extraer-clientes-mixnet.cjs
-   - extraer-clientes-mixnet.bat
 
-   Copialos en el ESCRITORIO de esa PC.
+EXTRACTOR 1: CLIENTES  (extraer-clientes-mixnet.bat)
+-----------------------------------------------------
+Opciones del menú:
+  [1] EXTRAER  →  Flujo completo. Genera CSV de clientes con correo.
+                  Siempre genera el archivo (apenas lee MXCTACLI).
+                  Busca correos hasta 70% de cobertura o 10 min.
+  [2] EXPLORAR →  Ver qué tablas DBF hay en la PC (con emails).
+  [3] DIAGNOSTICAR →  Ver emails en una carpeta específica.
 
-2) HACER DOBLE CLIC EN extraer-clientes-mixnet.bat
+  Salida: clientes_mixnet_*.csv (escritorio)
 
-   Aparecera un menu con 3 opciones:
+  Otros archivos generados:
+    clientes_sin_correo_*.csv  → los que faltan (captura manual)
+    resumen_mixnet_*.csv       → estadísticas de cobertura
 
-   [1] EXTRAER  →  Flujo completo automatico (busca todo y genera CSV)
-   [2] EXPLORAR →  VER que hay en la PC (archivos DBF, emails encontrados)
-   [3] DIAGNOSTICAR →  Ver emails en una carpeta especifica
 
-   RECOMENDACION: Primero elige [2] EXPLORAR para ver que hay.
-   Luego elige [1] EXTRAER para generar el archivo.
+EXTRACTOR 2: INVENTARIO  (extraer-inventario-mixnet.bat)
+---------------------------------------------------------
+Auto-detecta tablas de artículos, precios, stock, familias y
+proveedores por nombre de campo (no depende de nombres fijos).
 
-3) SI LA OTRA PC NO TIENE NODE INSTALADO
-   El .bat buscara Node automaticamente. Si no lo encuentra, la ventana
-   te avisara. Instala Node desde https://nodejs.org/ (Windows .msi)
-   y repite el paso 2.
+Opciones del menú:
+  [1] EXTRAER  →  Flujo completo. Busca tablas de inventario
+                  y genera CSV con código, descripción, precio,
+                  stock, familia, proveedor. Objetivo 85% precio.
+  [2] EXPLORAR →  Ver qué tablas de inventario existen.
+  [3] DIAGNOSTICAR →  Ver tablas de inventario en una carpeta.
 
-================================================
+  Salida: inventario_mixnet_*.csv (escritorio)
 
-QUE HACE CADA OPCION:
+  Otros archivos generados:
+    inventario_sin_precio_*.csv → artículos sin precio
+    resumen_inventario_*.csv    → cobertura de precio/stock
+    exploracion_inventario_*.csv→ todas las tablas encontradas
 
-[1] EXTRAER (flujo completo):
-   - Detecta todas las unidades accesibles (M:/ P:/ Z:/ C:/ etc.)
-   - Busca MXCTACLI.DBF (tabla de clientes)
-   - Lee TODOS los clientes
-   - Escanea TODAS las unidades buscando CUALQUIER archivo DBF con emails
-   - Cruza cada email con su cliente por RIF, codigo, telefono y razon social
-   - Genera: clientes_mixnet_FECHA.csv en el ESCRITORIO
-   - Muestra EN VIVO todo lo que hace (carpetas, archivos, errores)
 
-[2] EXPLORAR (ver que hay):
-   - Muestra que unidades estan conectadas
-   - Lista TODOS los archivos DBF encontrados
-   - Indica cuales tienen emails
-   - Guarda un reporte: exploracion_mixnet_FECHA.csv
-   - UTIL PARA SABER DONDE ESTAN LOS DATOS
+COMO FUNCIONA EL AUTO-DETECT:
+  El extractor de inventario detecta automáticamente:
+  - Tablas de ARTICULOS: tiene código + descripción + precio
+  - Tablas de PRECIOS: tiene código + precio (sin descripción)
+  - Tablas de STOCK: tiene código + existencia/saldo
+  - Tablas de FAMILIAS: tiene código + familia/categoría
+  - Tablas de PROVEEDORES: tiene código + proveedor/suplidor
 
-[3] DIAGNOSTICAR:
-   - Pide la ruta de una carpeta (ej: M:\comp01)
-   - Muestra todos los archivos DBF de esa carpeta
-   - Indica cuales tienen emails y cuantos
+  Detecta por nombres de campo (cod*, descri*, prec*, exist*,
+  fam*, prove*, etc.). No importa cómo se llame el archivo .DBF
 
-================================================
+
+ESTRUCTURA DE ARCHIVOS EN EL ESCRITORIO:
+  extraer-clientes-mixnet.bat     ← doble clic
+  extraer-clientes-mixnet.cjs     ← código (no tocar)
+  extraer-inventario-mixnet.bat   ← doble clic
+  extraer-inventario-mixnet.cjs   ← código (no tocar)
+
 
 SI NO FUNCIONA:
-- Ejecuta primero la opcion [2] EXPLORAR para ver que archivos DBF existen
-- Revisa si las unidades de red (M:/ P:/ Z:/) aparecen como "OK"
-- Si no aparecen, verifica que la red este conectada y las unidades montadas
-- Si aparecen pero no hay DBF, los datos pueden estar en otra ruta
-- El reporte de exploracion te dice exactamente que encontro
+  - Ejecuta [2] EXPLORAR primero (en cualquiera de los extractores)
+  - Revisa que M:/ P:/ Z:/ aparezcan como "OK"
+  - Si no aparecen, verifica la red y las unidades montadas
+  - Los reportes .csv te dicen exactamente qué tablas y campos hay
 
-================================================
 
-NOTA: El CJS tambien se puede ejecutar directamente:
-  node extraer-clientes-mixnet.cjs              → flujo completo
-  node extraer-clientes-mixnet.cjs --explorar   → ver que hay
-  node extraer-clientes-mixnet.cjs --diagnostico → ver emails
+V3 DEL EXTRACTOR DE CLIENTES:
+  - El CSV se genera desde el PRINCIPIO (no al final)
+  - Busca correos por: código, RIF, teléfono, razón social
+  - Cruce por código normalizado (003-03 == 3-3)
+  - Va mostrando cobertura % en cada ronda
+
+V1 DEL EXTRACTOR DE INVENTARIO:
+  - Auto-detecta tablas por campos (no depende de nombres)
+  - Prioriza carpetas tipo MixNet (comp01, RESPAMIX, etc.)
+  - Es rápido: solo parsea tablas con campos de inventario
+  - Presupuesto de tiempo configurable (default 10 min)
