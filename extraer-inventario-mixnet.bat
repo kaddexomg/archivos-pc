@@ -9,11 +9,10 @@ echo    EXTRACTOR DE INVENTARIO MIXNET  (solo lectura)
 echo ========================================================
 echo.
 echo  Este script SOLO LEE. No modifica nada de MixNet.
-echo  Auto-detecta tablas de artículos, precios, stock,
+echo  Auto-detecta tablas de articulos, precios, stock,
 echo  familias y proveedores por nombre de campo.
 echo.
 
-REM Buscar Node.js
 echo  Buscando Node.js...
 echo.
 
@@ -67,8 +66,8 @@ echo ========================================================
 echo   QUE QUIERES HACER?
 echo ========================================================
 echo.
-echo   1.  EXTRAER inventario (flujo completo, busca precios/stock)
-echo   2.  EXPLORAR primero (VER qué tablas de inventario hay)
+echo   1.  EXTRAER inventario (busca precios/stock)
+echo   2.  EXPLORAR primero (VER que tablas hay)
 echo   3.  DIAGNOSTICAR una carpeta especifica
 echo.
 echo ========================================================
@@ -89,9 +88,8 @@ echo ========================================================
 echo   EXTRAYENDO INVENTARIO...
 echo ========================================================
 echo.
-echo  Esto buscara tablas de artículos/precios/stock en
-echo  todas las unidades. El CSV se genera de inmediato
-echo  y se va enriqueciendo cada ronda (hasta 85% o 10 min).
+echo  Esto buscara tablas de articulos/precios/stock.
+echo  El CSV se genera de inmediato y se va enriqueciendo.
 echo.
 echo  NO cierres esta ventana. Espera a que diga "TERMINADO".
 echo.
@@ -132,10 +130,9 @@ echo.
 echo ========================================================
 echo   PROCESO TERMINADO.
 echo   Revisa tu ESCRITORIO para los archivos generados:
-echo     - inventario_mixnet_*.csv        (inventario completo)
-echo     - inventario_sin_precio_*.csv    (sin precio)
-echo     - resumen_inventario_*.csv       (cobertura)
-echo     - exploracion_inventario_*.csv   (tablas encontradas)
+echo     - inventario_mixnet_*.csv      (inventario completo)
+echo     - inventario_sin_precio_*.csv  (sin precio)
+echo     - resumen_inventario_*.csv     (cobertura)
 echo ========================================================
 echo.
 echo  Presiona cualquier tecla para cerrar...

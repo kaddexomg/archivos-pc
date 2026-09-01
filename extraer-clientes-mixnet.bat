@@ -13,7 +13,6 @@ echo  Siempre genera el CSV de clientes, y va buscando
 echo  correos hasta 70% de cobertura (o 10 min maximo).
 echo.
 
-REM 1) Buscar Node.js
 echo  Buscando Node.js...
 echo.
 
@@ -45,7 +44,6 @@ for %%p in (
 if defined NODE goto FOUND
 
 echo  No esta en rutas comunes. Buscando en C:\...
-echo  (Esto puede tardar 1-2 minutos, no cierres esta ventana)
 for /f "delims=" %%f in ('where /R "C:\" node.exe 2^>nul') do (
   set "NODE=%%f"
   goto FOUND
@@ -55,10 +53,6 @@ echo.
 echo  ============================================
 echo   [ERROR] No se encontro Node.js
 echo  ============================================
-echo.
-echo  Necesitas Node.js v13 o superior.
-echo  Descarga desde: https://nodejs.org/
-echo  Instala con opciones por defecto, reinicia, y vuelve a probar.
 echo.
 pause
 exit /b 1
@@ -72,7 +66,7 @@ echo ========================================================
 echo   QUE QUIERES HACER?
 echo ========================================================
 echo.
-echo   1.  EXTRAER clientes (flujo completo automatico)
+echo   1.  EXTRAER clientes (flujo completo, busca correos)
 echo   2.  EXPLORAR primero (VER que hay en esta PC)
 echo   3.  DIAGNOSTICAR una carpeta especifica
 echo.
@@ -103,8 +97,7 @@ for /f "tokens=1-2 delims=:" %%a in ('time /t') do set "HH=%%a%%b"
 set "OUT=clientes_mixnet_%DD%_%HH%.csv"
 echo  Archivo de salida: %OUT%
 echo.
-echo  Esto puede tardar varios minutos (escanea todas las unidades
-echo  buscando correos, priorizando carpetas MixNet).
+echo  Esto puede tardar varios minutos.
 echo  NO cierres esta ventana. Espera a que diga "TERMINADO".
 echo.
 echo --------------------------------------------------------
@@ -120,7 +113,7 @@ echo ========================================================
 echo.
 echo  Esto puede tardar varios minutos.
 echo.
-"%NODE%" "%~dp0extraer-clientes-mixnet.cjs" --explorar
+"%NODE%" "%~dp0extraer-clientes-mixnet.cjs" --explorar --tiempo 120
 goto FIN
 
 :DIAGNOSTICO
@@ -138,7 +131,10 @@ goto FIN
 echo.
 echo ========================================================
 echo   PROCESO TERMINADO.
-echo   Si genero un archivo, revisa tu ESCRITORIO.
+echo   Revisa tu ESCRITORIO para los archivos generados:
+echo     - clientes_mixnet_*.csv        (clientes con correo)
+echo     - clientes_sin_correo_*.csv    (faltan - captura manual)
+echo     - resumen_mixnet_*.csv         (cobertura)
 echo ========================================================
 echo.
 echo  Presiona cualquier tecla para cerrar...
