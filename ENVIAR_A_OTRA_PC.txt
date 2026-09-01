@@ -1,0 +1,39 @@
+COMO USAR EL EXTRACTOR DE CLIENTES MIXNET
+=========================================
+
+1) COPIAR ESTOS 2 ARCHIVOS A LA OTRA PC (la Windows 7 de la tienda,
+   la que tiene las unidades M:, P:, Z: y las carpetas C:\RESPAMIX):
+
+   - extraer-clientes-mixnet.cjs
+   - extraer-clientes-mixnet.bat
+
+   Copialos en una carpeta del Escritorio, por ejemplo:
+   C:\Users\<usuario>\Desktop\EXTRACCION_CLIENTES\
+
+2) HACER DOBLE CLIC EN extraer-clientes-mixnet.bat
+
+   Eso es todo. NO hay que escribir NINGUN comando.
+
+   El script:
+   - Detecta la compania activa (busca MXCTACLI.DBF en todas las unidades,
+     en rutas tipicas, y tambien usando reporte_mixnet.json si existe)
+   - Lee todos los clientes
+   - Escanea TODAS las unidades (M:, P:, Z:, C:, D:...) buscando el CORREO
+     por su VALOR (@) en cualquier tabla DBF, incluso en respaldos RESPAMIX
+   - Cruza cada correo con su cliente por RIF, codigo, telefono y razon social
+   - Genera el archivo:  clientes_mixnet_FECHA_HORA.csv  (al lado del .bat)
+
+3) SI LA OTRA PC NO TIENE NODE INSTALADO
+   El .bat buscara Node automaticamente. Si no lo encuentra, la ventana
+   te avisara. Instala Node desde https://nodejs.org/ (Windows .msi)
+   y repite el paso 2.
+
+=========================================================
+
+NOTA IMPORTANTE: 
+- El CJS tambien se puede ejecutar SIN el .bat haciendo doble clic directo
+  sobre extraer-clientes-mixnet.cjs (si Node esta instalado).
+- Si alguien sabe EXACTAMENTE donde estan los datos de una compania,
+  puede ejecutar (opcional):
+    node extraer-clientes-mixnet.cjs --completo --dir "M:\comp01"
+  pero NO hace falta: el flujo automatico lo encuentra solo.
