@@ -19,9 +19,12 @@ COMO USAR EL EXTRACTOR DE CLIENTES MIXNET
      en rutas tipicas, y tambien usando reporte_mixnet.json si existe)
    - Lee todos los clientes
    - Escanea TODAS las unidades (M:, P:, Z:, C:, D:...) buscando el CORREO
-     por su VALOR (@) en cualquier tabla DBF, incluso en respaldos RESPAMIX
+     por su VALOR (@) en cualquier tabla DBF, incluso en respaldos RESPAMIX,
+     bajando hasta 40 niveles de profundidad en cualquier carpeta
+   - Muestra EN VIVO la carpeta que esta revisando (para que veas que va)
    - Cruza cada correo con su cliente por RIF, codigo, telefono y razon social
-   - Genera el archivo:  clientes_mixnet_FECHA_HORA.csv  (al lado del .bat)
+   - Genera el archivo:  clientes_mixnet_FECHA_HORA.csv
+     SIEMPRE en el ESCRITORIO de esta PC (no importa donde este el .bat).
 
 3) SI LA OTRA PC NO TIENE NODE INSTALADO
    El .bat buscara Node automaticamente. Si no lo encuentra, la ventana

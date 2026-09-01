@@ -1,12 +1,10 @@
 @echo off
 chcp 65001 >nul
-title JJ Paper - Extraer CLIENTES de MixNet
+title JJ Paper - Explorador de datos MixNet
 echo.
 echo ========================================================
-echo    EXTRACTOR DE CLIENTES MIXNET  (solo lectura)
+echo    EXPLORADOR DE DATOS MIXNET  (solo lectura)
 echo ========================================================
-echo.
-echo  ESTE SCRIPT SOLO LEE. No modifica nada de MixNet.
 echo.
 echo  Buscando Node.js instalado...
 echo.
@@ -40,7 +38,7 @@ for %%p in (
 )
 if defined NODE goto RUN
 
-REM 3) Busqueda amplia en el disco C: (puede tardar la 1a vez)
+REM 3) Busqueda amplia en el disco C: (puede tardar unos minutos la 1a vez)
 echo  No esta en las rutas comunes. Buscando en todo el disco C: ...
 echo  (Esto puede tardar; no cierres esta ventana)
 for /f "delims=" %%f in ('where /R "C:\" node.exe 2^>nul') do (
@@ -81,33 +79,11 @@ exit /b 1
 echo.
 echo  Node encontrado: %NODE%
 echo.
-echo ========================================================
-echo   INICIANDO FLUJO AUTOMATICO... No hace falta que hagas
-echo   nada. El script hara todo solo y avisara al terminar.
-echo ========================================================
+"%NODE%" "%~dp0explorar-mixnet.cjs" %*
 echo.
-echo  Nombre del archivo de salida (con fecha y hora):
-for /f "tokens=1-3 delims=/ " %%a in ('date /t') do set "DD=%%c%%a%%b"
-for /f "tokens=1-2 delims=:" %%a in ('time /t') do set "HH=%%a%%b"
-set "OUT=clientes_mixnet_%DD%_%HH%.csv"
-echo    %OUT%
-echo.
-echo  Esto puede tardar varios minutos (escanea todas las unidades
-echo  buscando el email). NO cierres esta ventana. Espera a que
-echo  diga "TERMINADO" y "ARCHIVO GENERADO".
-echo.
-echo  -------------------------------------------------------
-echo   Trabajando... (si ves progreso, esta normal)
-echo  -------------------------------------------------------
-echo.
-"%NODE%" "%~dp0extraer-clientes-mixnet.cjs" --completo --out "%OUT%"
-echo.
-
-:FIN
-echo.
-echo  ========================================================
-echo   EL FLUJO TERMINO. Revisa el archivo:  %OUT%
-echo   (se guardo en el ESCRITORIO de esta PC)
-echo  ========================================================
+echo --------------------------------------------------------
+echo  Terminado. Los reportes estan junto a este archivo:
+echo    reporte_mixnet.txt
+echo    reporte_mixnet.json
 echo.
 pause

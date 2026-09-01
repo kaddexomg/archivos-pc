@@ -216,8 +216,18 @@ function candidates(){
 // los correos de clientes). Solo se evitan carpetas de sistema irrelevantes.
 const EXCLUDE_SCAN = /windows|program files|programdata|appdata|perflogs|\$recycle|fonts|drivers|\.git|node_modules|\$windows|bluestacks|anaconda|nodejs|python|nvidia| intel\b|\.thumbnails|isabel\/dcim|music|videos|pictures|musica/i;
 
-function walkScan(dir, depth, mask, files){
-  if (depth > 16) return;
+// Escaneo total y profundo: baja hasta 40 niveles (cualquier carpeta anidada).
+// `stats` acumula: carpetas/folders revisados, archivos vistos, intervalos de
+// reporte en vivo para que el usuario VEA qué está haciendo en todo momento.
+function walkScan(dir, depth, mask, files, stats, verbose){
+  if (depth > 40) return;
+  if (stats){
+    stats.folders++;
+    if (verbose && (stats.folders % 300 === 1)){
+      try { fs.writeSync(1, '\r  [revisando] ' + dir + '   (carpetas: ' + stats.folders +
+        ', archivos vistos: ' + stats.filesSeen + ')      '); } catch(_){}
+    }
+  }
   let entries;
   try { entries = fs.readdirSync(dir, { withFileTypes: true }); }
   catch(_) { return; }
@@ -225,13 +235,35 @@ function walkScan(dir, depth, mask, files){
     const fp = path.join(dir, e.name);
     if (e.isDirectory()){
       if (EXCLUDE_SCAN.test(e.name)) continue;
-      walkScan(fp, depth + 1, mask, files);
+      walkScan(fp, depth + 1, mask, files, stats, verbose);
     } else if (e.isFile() && mask.test(e.name)){
+      if (stats) stats.filesSeen++;
       let st; try { st = fs.statSync(fp); } catch(_){ continue; }
       if (st.size < 33) continue;
       files.push({ path: fp, size: st.size });
     }
   }
+}
+
+// Resuelve dónde va el CSV: SIEMPRE al Escritorio del usuario si existe
+// (aunque el .bat esté en otra carpeta), y si no, junto al script.
+function resolveOutPath(outF){
+  if (outF && path.isAbsolute(outF)) return outF;
+  const desks = [];
+  const userHome = process.env.USERPROFILE || process.env.HOMEDRIVE + process.env.HOMEPATH || '';
+  if (userHome){
+    desks.push(path.join(userHome, 'Desktop'));
+    desks.push(path.join(userHome, 'Escritorio'));
+    if (process.env.USERPROFILE) desks.push(path.join(process.env.USERPROFILE, 'OneDrive', 'Desktop'));
+  }
+  desks.push('C:\\Users\\Public\\Desktop');
+  for (const d of desks){
+    try { if (fs.existsSync(d) && fs.statSync(d).isDirectory()){
+      const base = outF || ('clientes_mixnet_completo_' + Date.now() + '.csv');
+      return path.isAbsolute(base) ? base : path.join(d, base);
+    } } catch(_){}
+  }
+  return path.join(__dirname, outF || ('clientes_mixnet_completo_' + Date.now() + '.csv'));
 }
 
 function findAnyMxctacli(){
@@ -454,6 +486,19 @@ function modoCompleto(outF, directDir){
     say('[ERROR] No encontré ningún MXCTACLI.DBF en ninguna unidad.');
     say('  Verifica que la red esté conectada o monta la unidad M:.');
     say('  O usa:  --completo --dir "C:\\ruta\\a\\la\\compa\\fia"');
+    // Aunque falle, SIEMPRE dejamos un CSV en el ESCRITORIO con el motivo,
+    // para que el usuario sepa que el script corrió y qué se revisó.
+    const outErr = resolveOutPath(outF);
+    try {
+      fs.writeFileSync(outErr,
+        'RESULTADO,EXTRAER-CLIENTES-MIXNET\r\n' +
+        'ESTADO,ERROR_NO_HAY_MXCTACLI\r\n' +
+        'MOTIVO,No se encontro ningun MXCTACLI.DBF en ninguna unidad\r\n' +
+        'UNIDADES_REVISADAS,' + ROOTS.join(';') + '\r\n' +
+        'FECHA,' + new Date().toLocaleString() + '\r\n' +
+        'AYUDA,Verifica que la red este conectada o usa --dir con la ruta de la compania\r\n', 'utf8');
+      say('  (de todos modos se creo el reporte en tu ESCRITORIO: ' + outErr + ')');
+    } catch(_){}
     return;
   }
   comps.forEach((c,i) => say('  ' + (i+1) + ') ' + c.dir.replace(/[\\\/]+$/, '') +
@@ -475,7 +520,18 @@ function modoCompleto(outF, directDir){
   });
   say('  Clientes encontrados: ' + rows.length);
   say('  Campos: ' + ck.join(', '));
-  if (!rows.length){ say('[ERROR] MXCTACLI no tiene registros.'); return; }
+  if (!rows.length){ say('[ERROR] MXCTACLI no tiene registros.');
+    try {
+      fs.writeFileSync(resolveOutPath(outF),
+        'RESULTADO,EXTRAER-CLIENTES-MIXNET\r\n' +
+        'ESTADO,ERROR_MXCTACLI_VACIO\r\n' +
+        'MOTIVO,MXCTACLI no tiene registros\r\n' +
+        'FUENTE,' + best.path + '\r\n' +
+        'FECHA,' + new Date().toLocaleString() + '\r\n', 'utf8');
+      say('  (reporte dejado en tu ESCRITORIO)');
+    } catch(_){}
+    return;
+  }
 
   // ---- PASO 3: escanear TODAS las unidades buscando emails por valor ----
   say('\n[3/6] Escaneando TODAS las unidades en busca del correo del cliente...');
@@ -498,6 +554,7 @@ function modoCompleto(outF, directDir){
   } catch(_){}
 
   // 3b) Luego TODO el resto: red y discos locales (incluye C: con RESPAMIX)
+  //     Busca en CUALQUIER directorio hasta 40 niveles de profundidad.
   const drives = ['M:', 'P:', 'Z:', 'C:', 'D:', 'E:', 'F:'];
   const seenByfile = {};
   function addFile(fp){
@@ -512,9 +569,13 @@ function modoCompleto(outF, directDir){
   for (const d of drives){
     const root = d.endsWith('\\') ? d : d + '\\';
     if (!fs.existsSync(root)) continue;
+    say('\n  === Unidad ' + d + ' ===');
     const files = [];
-    walkScan(root, 0, /\.dbf$/i, files);
-    say('  Unidad ' + d + ': ' + files.length + ' archivos DBF...');
+    const stats = { folders: 0, filesSeen: 0 };
+    walkScan(root, 0, /\.dbf$/i, files, stats, true);
+    if (stats.folders > 300){ try { fs.writeSync(1, '\r' + new Array(40).join(' ') + '\r'); } catch(_){} }
+    say('  Unidad ' + d + ' terminada: ' + stats.folders + ' carpetas, ' +
+        stats.filesSeen + ' archivos DBF vistos, ' + files.length + ' valiosos.');
     for (const f of files){
       addFile(f.path);
       scannedFiles++;
@@ -574,7 +635,7 @@ function modoCompleto(outF, directDir){
   let head = ck.slice();
   if (head.indexOf('__email') === -1) head.push('__email');
   if (head.indexOf('__tiene_email') === -1) head.push('__tiene_email');
-  const outPath = path.isAbsolute(outF) ? outF : path.join(__dirname, outF || 'clientes_mixnet_completo.csv');
+  const outPath = resolveOutPath(outF);
   fs.writeFileSync(outPath, toCSV(rows, head), 'utf8');
 
   // ---- PASO 6: resumen ----
@@ -583,6 +644,7 @@ function modoCompleto(outF, directDir){
   say('  ARCHIVO GENERADO:  ' + outPath);
   say('  ' + rows.length + ' clientes | ' + conMail + ' con correo (' +
       (rows.length ? Math.round(conMail/rows.length*100) : 0) + '%)');
+  say('  EL ARCHIVO ESTA EN TU ESCRITORIO.');
   say('=========================================================');
 }
 
@@ -732,4 +794,18 @@ function main(){
   say('   --detectar                      buscar dónde está MXCTACLI');
 }
 
-main();
+// Envoltorio global: si algo falla inesperadamente, escribimos un log al
+// lado del script para que el usuario sepa qué pasó (en vez de cerrar en silencio).
+try {
+  main();
+} catch (e) {
+  try {
+    const logPath = path.join(__dirname, 'error_extractor.log');
+    fs.writeFileSync(logPath,
+      'FECHA: ' + new Date().toLocaleString() + '\r\n' +
+      'ERROR : ' + (e && e.stack ? e.stack : String(e)) + '\r\n', 'utf8');
+    say('\n[ERROR] Ocurri\u00f3 un error inesperado. Detalles guardados en: ' + logPath);
+  } catch (_){}
+  say(String(e && e.stack ? e.stack : e));
+  process.exit(1);
+}
