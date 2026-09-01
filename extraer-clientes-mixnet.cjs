@@ -740,31 +740,98 @@ function aplicarCorreos(rows, campos, idx, usarFuzzy) {
 /* ============================================================
    RESOLVER RUTA DE SALIDA (ESCRITORIO)
    ============================================================ */
+/* Devuelve TODAS las rutas de salida posibles donde escribir el CSV.
+   Se escribe en CADA UNA, garantizando que el archivo aparezca
+   en C: tenga el escritorio donde tenga. */
+function rutasSalida(nombre) {
+  var rutas = [];
+  var vista = []; // Desktop real de Windows
+  var userHome = process.env.USERPROFILE || '';
+
+  // Escritorio real de Windows 7/10 (via registros de shell folders)
+  try {
+    var reg = [
+      'reg query "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\User Shell Folders" /v Desktop',
+      'reg query "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Shell Folders" /v Desktop'
+    ];
+    for (var ri = 0; ri < reg.length; ri++) {
+      var cp = require('child_process');
+      var out = cp.execSync(reg[ri], { encoding: 'utf8' });
+      var m = out.match(/REG_(?:EXPAND_)?SZ\s+([^\r\n]+)/i);
+      if (m) {
+        var val = m[1].trim();
+        val = val.replace(/%USERPROFILE%/i, process.env.USERPROFILE || '');
+        val = val.replace(/%HOMEDRIVE%%HOMEPATH%/i, (process.env.HOMEDRIVE||'') + (process.env.HOMEPATH||''));
+        vista.push(val);
+      }
+    }
+  } catch (_) { }
+
+  // Candidatas manuales
+  var cand = [];
+  if (userHome) cand.push(userHome + '\\Desktop', userHome + '\\Escritorio', userHome + '\\Documents\\Desktop');
+  cand.push('C:\\Users\\Public\\Desktop', 'C:\\Users\\Public\\Escritorio');
+
+  for (var ci = 0; ci < cand.length; ci++) {
+    try { if (fs.existsSync(cand[ci]) && fs.statSync(cand[ci]).isDirectory()) rutas.push(path.join(cand[ci], nombre)); } catch (_) {}
+  }
+  for (var vi = 0; vi < vista.length; vi++) {
+    try { if (fs.existsSync(vista[vi]) && fs.statSync(vista[vi]).isDirectory()) rutas.push(path.join(vista[vi], nombre)); } catch (_) {}
+  }
+
+  // SIEMPRE incluir la carpeta del script (C:\ donde estan los .bat)
+  rutas.push(path.join(__dirname, nombre));
+
+  // Quitar duplicados
+  var unicas = [];
+  var visto = {};
+  for (var ui = 0; ui < rutas.length; ui++) {
+    var r = path.normalize(rutas[ui]);
+    if (!visto[r]) { visto[r] = true; unicas.push(r); }
+  }
+  return unicas;
+}
+
 function resolveOutPath(outF) {
   if (outF && path.isAbsolute(outF)) return outF;
-
-  var userHome = process.env.USERPROFILE || '';
-  if (!userHome && process.env.HOMEDRIVE && process.env.HOMEPATH) {
-    userHome = process.env.HOMEDRIVE + process.env.HOMEPATH;
-  }
-
-  var desks = [];
-  if (userHome) {
-    desks.push(path.join(userHome, 'Desktop'));
-    desks.push(path.join(userHome, 'Escritorio'));
-  }
-  desks.push('C:\\Users\\Public\\Desktop');
-
   var nombre = outF || ('clientes_mixnet_' + Date.now() + '.csv');
+  var rutas = rutasSalida(nombre);
+  return rutas[0] || path.join(__dirname, nombre);
+}
 
-  for (var i = 0; i < desks.length; i++) {
+/* Escribe el CSV en TODAS las rutas de salida. Devuelve la primera
+   exitosa. Así, aunque el escritorio este en una unidad rara, el
+   archivo SIEMPRE queda en C: junto a los .bat. */
+function escribirCSVTodas(rows, head, outF) {
+  var nombre = outF && path.isAbsolute(outF)
+    ? path.basename(outF)
+    : (outF || ('clientes_mixnet_' + Date.now() + '.csv'));
+  var rutas = rutasSalida(nombre);
+  var csv = toCSV(rows, head);
+  var primera = null;
+  for (var i = 0; i < rutas.length; i++) {
     try {
-      if (fs.existsSync(desks[i]) && fs.statSync(desks[i]).isDirectory()) {
-        return path.join(desks[i], nombre);
-      }
+      fs.writeFileSync(rutas[i], csv, 'utf8');
+      if (!primera) primera = rutas[i];
     } catch (_) { }
   }
-  return path.join(__dirname, nombre);
+  return { primera: primera, rutas: rutas, csv: csv };
+}
+
+function escribirCSV(rows, head, outPath) {
+  var res = escribirCSVTodas(rows, head, path.basename(outPath));
+  return !!res.primera;
+}
+
+/* Escribe un texto (reporte/resumen) en TODAS las rutas de salida. */
+function escribirEnTodas(texto, outF) {
+  var nombre = outF && path.isAbsolute(outF) ? path.basename(outF) : (outF || 'archivo_' + Date.now() + '.csv');
+  var rutas = rutasSalida(nombre);
+  var primera = null;
+  for (var i = 0; i < rutas.length; i++) {
+    try { fs.writeFileSync(rutas[i], texto, 'utf8'); if (!primera) primera = rutas[i]; } catch (_) {}
+  }
+  return primera || path.join(__dirname, nombre);
 }
 
 /* esc+rv3 funciona igual que resolveOutPath pero para fechas. */
@@ -877,9 +944,14 @@ function modoCompleto(opts) {
   var head = ck.slice();
   head.push('__email', '__tiene_email');
 
-  log('\n  Escribiendo CSV de clientes en ' + mainPath + ' ...');
-  escribirCSV(rows, head, mainPath);
+  log('\n  Generando CSV de clientes...');
+  var resBase = escribirCSVTodas(rows, head, base + ext);
+  mainPath = resBase.primera;
   log('  [CSV BASE GUARDADO] ' + mainPath + ' (' + rows.length + ' clientes)');
+  log('  Copias escritas en ' + resBase.rutas.length + ' ubicaciones:');
+  for (var rb = 0; rb < resBase.rutas.length; rb++) {
+    log('      - ' + resBase.rutas[rb]);
+  }
 
   var campos = camposCliente(ck);
   log('  Campos de cruce: razón=' + (campos.razF || '?') + ', RIF=' + (campos.rifF || '?') +
@@ -914,7 +986,7 @@ function modoCompleto(opts) {
 
       // Reescribir CSV incremental con los correos encontrados (no fuzzy aún)
       aplicarCorreos(rows, campos, idxNuevo, false);
-      escribirCSV(rows, head, mainPath);
+      escribirCSVTodas(rows, head, base + ext);
       log('  CSV actualizado: ' + mainPath);
 
       idx = idxNuevo;
@@ -945,26 +1017,18 @@ function modoCompleto(opts) {
 
   // PASO 6: Escribir CSV final + reportes
   log('\n[PASO 6/6] Escribiendo archivos finales...');
-  escribirCSV(rows, head, mainPath);
+  var resFinal = escribirCSVTodas(rows, head, base + ext);
+  mainPath = resFinal.primera;
 
   // Reporte de clientes sin correo
-  var sinPath = resolveOutPath('clientes_sin_correo_' + stamp + '.csv');
-  var sinHead = ['CODIGO', 'RAZON_SOCIAL', 'RIF', 'TELEFONO'];
-  var sinLines = [sinHead.join(',')];
-  for (var si = 0; si < res.sinCorreo.length; si++) {
-    var s = res.sinCorreo[si];
-    sinLines.push([s.cod, s.raz, s.rif, s.tel].map(escCSV).join(','));
-  }
-  try {
-    fs.writeFileSync(sinPath, sinLines.join('\r\n'), 'utf8');
-    log('  Sin correo (' + res.sinCorreo.length + '): ' + sinPath);
-  } catch (e) {
-    log('  No se pudo escribir reporte sin correo: ' + e.message);
-  }
+  var sinPath = escribirEnTodas(res.sinCorreo.length ?
+    (['CODIGO,RAZON_SOCIAL,RIF,TELEFONO'].concat(res.sinCorreo.map(function(s){
+      return [s.cod, s.raz, s.rif, s.tel].map(escCSV).join(',');
+    })).join('\r\n')) : '', 'clientes_sin_correo_' + stamp + '.csv');
+  log('  Sin correo (' + res.sinCorreo.length + '): ' + sinPath);
 
   // Resumen
-  var resPath = resolveOutPath('resumen_mixnet_' + stamp + '.csv');
-  var resLines = [
+  var resPath = escribirEnTodas([
     'METRICA,VALOR',
     'CLIENTES_TOTAL,' + rows.length,
     'CLIENTES_CON_CORREO,' + res.conMail,
@@ -984,13 +1048,8 @@ function modoCompleto(opts) {
     'SIN_CORREO,' + res.sinCorreo.length,
     'ARCHIVO_CLIENTES,' + mainPath,
     'ARCHIVO_SIN_CORREO,' + sinPath
-  ];
-  try {
-    fs.writeFileSync(resPath, resLines.join('\r\n'), 'utf8');
-    log('  Resumen: ' + resPath);
-  } catch (e) {
-    log('  No se pudo escribir resumen: ' + e.message);
-  }
+  ].join('\r\n'), 'resumen_mixnet_' + stamp + '.csv');
+  log('  Resumen: ' + resPath);
 
   var elapsed = Math.round((Date.now() - t0) / 1000);
   log('\n=========================================================');
@@ -1057,7 +1116,6 @@ function modoExplorar(opts) {
 
   // Reporte siempre al final
   var stamp = stFecha();
-  var reportePath = resolveOutPath('exploracion_mixnet_' + stamp + '.csv');
   var reporteLines = ['ARCHIVO,REGISTROS,CAMPOS,TAMANO_KB'];
   for (var ri = 0; ri < esc.meta.length; ri++) {
     var m = esc.meta[ri];
@@ -1068,12 +1126,8 @@ function modoExplorar(opts) {
       Math.round((m.size || 0) / 1024)
     );
   }
-  try {
-    fs.writeFileSync(reportePath, reporteLines.join('\r\n'), 'utf8');
-    log('\n  Reporte guardado en: ' + reportePath);
-  } catch (e) {
-    log('\n  No se pudo guardar el reporte: ' + e.message);
-  }
+  var reportePath = escribirEnTodas(reporteLines.join('\r\n'), 'exploracion_mixnet_' + stamp + '.csv');
+  log('\n  Reporte guardado en: ' + reportePath);
 }
 
 /* ============================================================
@@ -1131,7 +1185,6 @@ function modoDiagnostico(baseDir) {
   try { entries = fs.readdirSync(baseDir); } catch (e) { log('  Error: ' + e.message); return; }
 
   var totalEmails = 0;
-  var reportePath = resolveOutPath('diagnostico_' + stFecha() + '.csv');
   var repLines = ['ARCHIVO,REGISTROS,CON_EMAIL,CAMPOS'];
   for (var ei = 0; ei < entries.length; ei++) {
     if (!/\.dbf$/i.test(entries[ei])) continue;
@@ -1158,10 +1211,8 @@ function modoDiagnostico(baseDir) {
       totalEmails += mails;
     }
   }
-  try {
-    fs.writeFileSync(reportePath, repLines.join('\r\n'), 'utf8');
-    log('  Reporte diagnóstico: ' + reportePath);
-  } catch (e) { log('  No se pudo escribir reporte: ' + e.message); }
+  var reportePath = escribirEnTodas(repLines.join('\r\n'), 'diagnostico_' + stFecha() + '.csv');
+  log('  Reporte diagnóstico: ' + reportePath);
 
   log('\n  Total emails encontrados por valor: ' + totalEmails);
 }

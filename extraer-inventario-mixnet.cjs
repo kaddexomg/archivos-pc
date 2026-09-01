@@ -165,26 +165,86 @@ function stFecha() {
          p(d.getHours())+p(d.getMinutes())+p(d.getSeconds());
 }
 
+/* Devuelve TODAS las rutas de salida posibles donde escribir el CSV.
+   Se escribe en CADA UNA, garantizando que el archivo aparezca
+   en C: tenga el escritorio donde tenga. */
+function rutasSalida(nombre) {
+  var rutas = [];
+  var vista = [];
+  var userHome = process.env.USERPROFILE || '';
+
+  // Escritorio real de Windows (via registros de shell folders)
+  try {
+    var reg = [
+      '"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\User Shell Folders" /v Desktop',
+      '"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Shell Folders" /v Desktop'
+    ];
+    for (var ri = 0; ri < reg.length; ri++) {
+      var cp = require('child_process');
+      var out = cp.execSync('reg query ' + reg[ri], { encoding: 'utf8' });
+      var m = out.match(/REG_(?:EXPAND_)?SZ\s+([^\r\n]+)/i);
+      if (m) {
+        var val = m[1].trim();
+        val = val.replace(/%USERPROFILE%/i, process.env.USERPROFILE || '');
+        val = val.replace(/%HOMEDRIVE%%HOMEPATH%/i, (process.env.HOMEDRIVE||'') + (process.env.HOMEPATH||''));
+        vista.push(val);
+      }
+    }
+  } catch (_) { }
+
+  var cand = [];
+  if (userHome) cand.push(userHome + '\\Desktop', userHome + '\\Escritorio', userHome + '\\Documents\\Desktop');
+  cand.push('C:\\Users\\Public\\Desktop', 'C:\\Users\\Public\\Escritorio');
+
+  for (var ci = 0; ci < cand.length; ci++) {
+    try { if (fs.existsSync(cand[ci]) && fs.statSync(cand[ci]).isDirectory()) rutas.push(path.join(cand[ci], nombre)); } catch (_) {}
+  }
+  for (var vi = 0; vi < vista.length; vi++) {
+    try { if (fs.existsSync(vista[vi]) && fs.statSync(vista[vi]).isDirectory()) rutas.push(path.join(vista[vi], nombre)); } catch (_) {}
+  }
+
+  rutas.push(path.join(__dirname, nombre));
+
+  var unicas = [], visto = {};
+  for (var ui = 0; ui < rutas.length; ui++) {
+    var r = path.normalize(rutas[ui]);
+    if (!visto[r]) { visto[r] = true; unicas.push(r); }
+  }
+  return unicas;
+}
+
 function resolveOutPath(outF) {
   if (outF && path.isAbsolute(outF)) return outF;
-  var userHome = process.env.USERPROFILE || '';
-  if (!userHome && process.env.HOMEDRIVE && process.env.HOMEPATH)
-    userHome = process.env.HOMEDRIVE + process.env.HOMEPATH;
-  var desks = [];
-  if (userHome) { desks.push(path.join(userHome,'Desktop')); desks.push(path.join(userHome,'Escritorio')); }
-  desks.push('C:\\Users\\Public\\Desktop');
-  var nombre = outF || ('inventario_mixnet_'+Date.now()+'.csv');
-  for (var i = 0; i < desks.length; i++) {
-    try { if (fs.existsSync(desks[i]) && fs.statSync(desks[i]).isDirectory())
-      return path.join(desks[i], nombre);
-    } catch(_){}
+  var nombre = outF || ('inventario_mixnet_' + Date.now() + '.csv');
+  return rutasSalida(nombre)[0] || path.join(__dirname, nombre);
+}
+
+/* Escribe el CSV en TODAS las rutas de salida. Devuelve la primera exitosa. */
+function escribirCSVTodas(rows, head, outF) {
+  var nombre = outF && path.isAbsolute(outF) ? path.basename(outF) : (outF || ('inventario_mixnet_' + Date.now() + '.csv'));
+  var rutas = rutasSalida(nombre);
+  var csv = toCSV(rows, head);
+  var primera = null;
+  for (var i = 0; i < rutas.length; i++) {
+    try { fs.writeFileSync(rutas[i], csv, 'utf8'); if (!primera) primera = rutas[i]; } catch (_) {}
   }
-  return path.join(__dirname, nombre);
+  return { primera: primera, rutas: rutas, csv: csv };
 }
 
 function escribirCSV(rows, head, outPath) {
-  try { fs.writeFileSync(outPath, toCSV(rows, head), 'utf8'); return true; }
-  catch(e) { log('[ERROR] No se pudo escribir CSV: '+e.message); return false; }
+  var res = escribirCSVTodas(rows, head, path.basename(outPath));
+  return !!res.primera;
+}
+
+/* Escribe un texto (reporte/resumen) en TODAS las rutas de salida. */
+function escribirEnTodas(texto, outF) {
+  var nombre = outF && path.isAbsolute(outF) ? path.basename(outF) : (outF || 'archivo_' + Date.now() + '.csv');
+  var rutas = rutasSalida(nombre);
+  var primera = null;
+  for (var i = 0; i < rutas.length; i++) {
+    try { fs.writeFileSync(rutas[i], texto, 'utf8'); if (!primera) primera = rutas[i]; } catch (_) {}
+  }
+  return primera || path.join(__dirname, nombre);
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -496,8 +556,7 @@ function aplicarEnriquecimiento(rows, campos, idx) {
    ───────────────────────────────────────────────────────────── */
 function escribirResumen(campos, clasifPrincipal, idx, cob, stats, tIni) {
   var elapsed = Math.round((Date.now()-tIni)/1000);
-  var outPath = resolveOutPath('resumen_inventario_'+stFecha()+'.csv');
-  var lines = [
+  var outPath = escribirEnTodas([
     'METRICA,VALOR',
     'ARTICULOS_TOTAL,'+cob.total,
     'CON_PRECIO,'+cob.conPrecio+' ('+cob.pctPrecio+'%)',
@@ -512,17 +571,15 @@ function escribirResumen(campos, clasifPrincipal, idx, cob, stats, tIni) {
     'INDICE_FAMILIAS,'+Object.keys(idx.familias).length+' codigos',
     'INDICE_PROVEEDORES,'+Object.keys(idx.proveedores).length+' codigos',
     'TIEMPO_TOTAL_SEG,'+elapsed
-  ];
-  try { fs.writeFileSync(outPath, lines.join('\r\n'), 'utf8'); log('  Resumen: '+outPath); }
-  catch(e) { log('  No se pudo escribir resumen: '+e.message); }
+  ].join('\r\n'), 'resumen_inventario_'+stFecha()+'.csv');
+  log('  Resumen: '+outPath);
 }
 
 function escribirSinPrecio(sinPrecio) {
-  var outPath = resolveOutPath('inventario_sin_precio_'+stFecha()+'.csv');
   var lines = ['CODIGO,DESCRIPCION'];
   for(var i=0;i<sinPrecio.length;i++) lines.push([sinPrecio[i].cod,sinPrecio[i].desc].map(escCSV).join(','));
-  try { fs.writeFileSync(outPath, lines.join('\r\n'), 'utf8'); log('  Sin precio ('+sinPrecio.length+'): '+outPath); }
-  catch(e) { log('  No se pudo escribir reporte sin precio: '+e.message); }
+  var outPath = escribirEnTodas(lines.join('\r\n'), 'inventario_sin_precio_'+stFecha()+'.csv');
+  log('  Sin precio ('+sinPrecio.length+'): '+outPath);
 }
 
 /* ═════════════════════════════════════════════════════════════
@@ -604,13 +661,13 @@ function modoCompleto(opts) {
     log('[ERROR] No se encontró ninguna tabla de ARTICULOS con código + descripción.');
     log('  Usa --diagnostico para inspeccionar una carpeta específica.');
     // Escribir reporte de exploración de todas las tablas encontradas
-    var repPath = resolveOutPath('exploracion_inventario_'+stFecha()+'.csv');
     var repLines = ['TIPO,ARCHIVO,TOTAL,CAMPOS'];
     for(var ri=0;ri<todosMeta.length;ri++){
       var m = todosMeta[ri];
-      repLines.push([m.tipo,path.basename(m.path),m.total,camposTodosJoin(m)].join(','));
+      repLines.push([m.tipo,path.basename(m.path),m.total,camposTodosJoin(m)].map(escCSV).join(','));
     }
-    try { fs.writeFileSync(repPath, repLines.join('\r\n'),'utf8'); log('  Reporte exploración: '+repPath); } catch(_){}
+    var repPath = escribirEnTodas(repLines.join('\r\n'), 'exploracion_inventario_'+stFecha()+'.csv');
+    log('  Reporte exploración: '+repPath);
     return;
   }
 
@@ -640,7 +697,7 @@ function modoCompleto(opts) {
   // (ya tenemos las keys de idx2.precios por Ncod, pero no las columnas originales)
   // Extraer columnas de precio originales del indice (ya en __precio1/2). No es necesario más.
 
-  // Agregar列 de precio original de la tabla principal si existen
+  // Agregar precio original de la tabla principal si existen
   for(var pi=0;pi<tablaPrincipal.camposPre.length;pi++){
     var pf = tablaPrincipal.camposPre[pi];
     if(head.indexOf(pf)===-1) head.push(pf);
@@ -659,8 +716,13 @@ function modoCompleto(opts) {
     if(head.indexOf(vf2)===-1) head.push(vf2);
   }
 
-  escribirCSV(tablaPrincipal.rows, head, mainPath);
-  log('  [CSV BASE] '+mainPath+' ('+tablaPrincipal.rows.length+' artículos)');
+  var resBase = escribirCSVTodas(tablaPrincipal.rows, head, base + ext);
+  mainPath = resBase.primera;
+  log('  [CSV BASE GUARDADO] ' + mainPath + ' (' + tablaPrincipal.rows.length + ' articulos)');
+  log('  Copias escritas en ' + resBase.rutas.length + ' ubicaciones:');
+  for (var rb = 0; rb < resBase.rutas.length; rb++) {
+    log('      - ' + resBase.rutas[rb]);
+  }
 
   // 5. Reportes
   log('\n[PASO 5/5] Generando reportes...');
@@ -668,13 +730,11 @@ function modoCompleto(opts) {
   escribirResumen(campos, tablaPrincipal, idx, cob, {tablas:dbClasificados.length}, t0);
 
   // Exploración completa de tablas encontradas
-  var repPath = resolveOutPath('exploracion_inventario_'+stamp+'.csv');
-  var repLines = ['TIPO,ARCHIVO,TOTAL,CAMPOS'];
-  for(var ri2=0;ri2<todosMeta.length;ri2++){
-    var mm = todosMeta[ri2];
-    repLines.push([mm.tipo, path.basename(mm.path), mm.total, (mm.camposTodos||[]).slice(0,30).join(';')].map(escCSV).join(','));
-  }
-  try { fs.writeFileSync(repPath, repLines.join('\r\n'),'utf8'); log('  Exploración tablas: '+repPath); } catch(_){}
+  var repPath = escribirEnTodas(
+    ['TIPO,ARCHIVO,TOTAL,CAMPOS'].concat(todosMeta.map(function(mm){
+      return [mm.tipo, path.basename(mm.path), mm.total, (mm.camposTodos||[]).slice(0,30).join(';')].map(escCSV).join(',');
+    })).join('\r\n'), 'exploracion_inventario_'+stamp+'.csv');
+  log('  Exploracion tablas: ' + repPath);
 
   log('\n=========================================================');
   log('  RESUMEN DE COBERTURA');
@@ -734,14 +794,13 @@ function modoExplorar(opts) {
   }
 
   var stamp = stFecha();
-  var repPath = resolveOutPath('exploracion_inventario_'+stamp+'.csv');
   var repLines = ['TIPO,ARCHIVO,TOTAL,RUTA,CAMPOS'];
   for(var ri=0;ri<esc.meta.length;ri++){
     var m = esc.meta[ri];
     repLines.push([m.tipo, path.basename(m.path), m.total, m.path, (m.camposTodos||[]).slice(0,20).join(';')].map(escCSV).join(','));
   }
-  try { fs.writeFileSync(repPath, repLines.join('\r\n'),'utf8'); log('\n  Reporte guardado: '+repPath); }
-  catch(e) { log('\n  No se pudo guardar reporte: '+e.message); }
+  var repPath = escribirEnTodas(repLines.join('\r\n'), 'exploracion_inventario_'+stamp+'.csv');
+  log('\n  Reporte guardado: '+repPath);
 }
 
 /* ═════════════════════════════════════════════════════════════
@@ -792,8 +851,8 @@ function modoDiagnostico(baseDir) {
   log('  Con familia: '+conFam);
   log('  Con proveedor: '+conProv);
 
-  try { fs.writeFileSync(reportPath, reportLines.join('\r\n'),'utf8'); log('\n  Reporte: '+reportPath); }
-  catch(e) { log('\n  Error: '+e.message); }
+  var reportPath = escribirEnTodas(reportLines.join('\r\n'), 'diagnostico_inv_'+stFecha()+'.csv');
+  log('\n  Reporte: '+reportPath);
 }
 
 /* ═════════════════════════════════════════════════════════════
