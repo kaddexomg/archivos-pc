@@ -1,33 +1,49 @@
 ========================================================================
-   JJ PAPER — GUÍA DE EXTRACCIÓN MIXNET v4.0 (PC WINDOWS 7)
+   JJ PAPER -- GUIA DE EXTRACCION MIXNET v4.1 (WINDOWS 7)
 ========================================================================
 
-Este paquete contiene el extractor reconstruido desde cero con validación
-consciente de precios en pantalla y extracción de clientes con emails.
+Esta version v4.1 incluye:
+  1. Escaneo automatico de todas las unidades (A: a Z:) y carpetas de red.
+  2. Deteccion de Servidor en Vivo por fecha de movimientos.
+  3. Comparador interactivo de precios entre tablas (MXCTAINV vs VICTAINV).
+  4. Buscador de CODIGO en pantalla: puedes escribir un codigo de producto
+     para ver su precio en vivo antes de extraer.
+  5. Extraccion de clientes con RIF limpio, telefonos, direccion y email.
+  6. Lanzador .bat 100% compatible con Windows 7 CMD (sin cuelgues ni errores).
 
 ------------------------------------------------------------------------
-CÓMO USARLO EN LA PC DE LA TIENDA (WINDOWS 7):
+INSTRUCCIONES PASO A PASO:
 ------------------------------------------------------------------------
 
-1. Abre esta carpeta en la PC de Windows 7.
-2. Haz doble clic en:
-      extraer-todo-mixnet.bat
+METODO 1 (Recomendado):
+  1. Abre esta carpeta en la PC de Windows 7.
+  2. Haz doble clic sobre:
+        extraer-todo-mixnet.bat
 
-3. El programa detectará automáticamente si la unidad M:\comp01 o la IP
-   192.168.0.185 están activas.
+METODO 2 (Si prefieres usar la consola CMD manualmente):
+  1. Abre Inicio -> Ejecutar -> cmd
+  2. Entra a esta carpeta y escribe:
+        node extraer-todo-mixnet.cjs
 
-4. CHECKPOINT DE VALIDACIÓN EN PANTALLA:
-   El programa te mostrará una comparativa con 3 artículos y sus precios:
-      - En MXCTAINV.DBF (Precio actual)
-      - En VICTAINV.DBF (Posible precio anterior)
+------------------------------------------------------------------------
+DURANTE LA EJECUCION:
+------------------------------------------------------------------------
 
-5. Confirma cuál de las tablas coincide con el precio que ves en pantalla
-   en MixNet hoy.
+- El programa detectara las unidades (C:, M:, P:, etc.) y te mostrara
+  la lista de carpetas con datos ordenadas por fecha reciente.
+- Presiona ENTER para seleccionar la fuente viva recomendada [1].
+- El programa te mostrara una comparativa de 3 productos de muestra.
+- VERIFICADOR DE CODIGO: Si quieres comprobar un articulo que ves en tu
+  pantalla de MixNet, escribe su codigo y presiona ENTER. Veras el precio
+  que tiene en cada tabla.
+- Cuando estes listo, presiona ENTER sin escribir nada para elegir la tabla
+  activa (habitualmente la opcion 1: MXCTAINV.DBF).
 
-6. El script extraerá todo en 20 segundos y guardará en tu ESCRITORIO:
-   - mixnet_productos_reales_[FECHA].csv  (Para abrir en Excel)
-   - mixnet_clientes_reales_[FECHA].csv   (Para abrir en Excel)
-   - mixnet_payload_supabase_[FECHA].json (Para subir directo a la base de datos)
+------------------------------------------------------------------------
+ARCHIVOS RESULTANTES (Se guardan en tu Escritorio):
+------------------------------------------------------------------------
+  - mixnet_productos_reales_*.csv  (Abre en Excel con precios reales)
+  - mixnet_clientes_reales_*.csv   (Abre en Excel con emails y telefonos)
+  - mixnet_payload_supabase_*.json (Listo para actualizar la base de datos)
 
-¡Listo!
 ========================================================================
