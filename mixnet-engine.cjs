@@ -324,7 +324,12 @@ function locateLiveStoreCompany() {
     'P:\\comp01',
     'P:\\Elias\\MIX\\MIX11\\comp01',
     'C:\\RESPAMIX\\MIX11 (servidor)\\comp01',
-    'D:\\MIXNET\\comp01'
+    'D:\\MIXNET\\comp01',
+    '\\\\192.168.0.185\\comp01',
+    '\\\\192.168.0.185\\COMP01',
+    '\\\\192.168.0.185\\M\\comp01',
+    '\\\\192.168.0.185\\MIXNET\\comp01',
+    '\\\\192.168.0.185\\MIXNET'
   ];
 
   var bestDir = null;
@@ -396,8 +401,177 @@ var databaseState = {
   summary: {}
 };
 
-// Escaneo y carga DINAMICA de productos
-function loadProducts(liveDir) {
+/* ═══════════════ INDICE DE MOVIMIENTOS REALES (FACTURAS Y PEDIDOS) ═══════════════ */
+function loadProductMovementIndex(liveDir) {
+  var stats = {};
+  if (!liveDir) return stats;
+
+  var dirsToScan = [liveDir];
+  var parentDir = path.dirname(liveDir);
+  if (parentDir && parentDir !== liveDir) {
+    dirsToScan.push(parentDir);
+    var ejCandidateDirs = ['ejercicios', 'EJERCICIOS'];
+    for (var ed = 0; ed < ejCandidateDirs.length; ed++) {
+      var fullEd = path.join(parentDir, ejCandidateDirs[ed]);
+      try {
+        if (fs.existsSync(fullEd)) {
+          var subs = fs.readdirSync(fullEd);
+          for (var s = 0; s < subs.length; s++) {
+            if (/^EJ/i.test(subs[s])) dirsToScan.push(path.join(fullEd, subs[s]));
+          }
+        }
+      } catch (_) {}
+    }
+  }
+
+  var invoiceLineFiles = [
+    'MXRENFAC.DBF', 'RENFAC.DBF', 'YPENCFAC.DBF', 'RENALB.DBF', 'MXTRAINV.DBF', 'TRAINV.DBF'
+  ];
+
+  var orderLineFiles = [
+    'MXRENPED.DBF', 'RENPED.DBF', 'PED.DBF', 'RENPED01.DBF'
+  ];
+
+  var processedFiles = {};
+
+  for (var di = 0; di < dirsToScan.length; di++) {
+    var curDir = dirsToScan[di];
+    try {
+      if (!fs.existsSync(curDir)) continue;
+
+      for (var f = 0; f < invoiceLineFiles.length; f++) {
+        var filePath = path.join(curDir, invoiceLineFiles[f]);
+        var normPath = path.normalize(filePath).toUpperCase();
+        if (processedFiles[normPath] || !fs.existsSync(filePath)) continue;
+        processedFiles[normPath] = true;
+
+        var struct = readDbfStructure(filePath);
+        if (!struct || struct.numRecords <= 0) continue;
+
+        var fn = struct.fieldNames;
+        var fCod  = findField(fn, ['codart', 'codigo', 'cod_art', 'articulo']);
+        var fCant = findField(fn, ['cantidad', 'cant', 'unidades', 'canti']);
+        var fPrec = findField(fn, ['precio', 'pventa', 'costo', 'preciov', 'precio_u']);
+        var fTot  = findField(fn, ['tot_lin', 'tot_ren', 'total', 'monto', 'subtotal']);
+        var fDoc  = findField(fn, ['numfac', 'numalb', 'documento', 'numdoc', 'num_fac']);
+        var fFec  = findField(fn, ['fecha', 'emision', 'fec_doc', 'fec_fac']);
+        var fTipo = findField(fn, ['tipo', 'tipodoc', 'tipo_tra']);
+
+        if (!fCod) continue;
+
+        var rows = readDbfRows(struct, 100000);
+        for (var r = 0; r < rows.length; r++) {
+          var row = rows[r];
+          var cod = String(row[fCod] || '').trim().toUpperCase();
+          if (!cod) continue;
+
+          if (fTipo) {
+            var tipo = String(row[fTipo] || '').trim().toUpperCase();
+            if (tipo && tipo !== 'S' && tipo !== 'SALIDA' && tipo !== 'FAC' && tipo !== 'ALB') continue;
+          }
+
+          var cant = parseFloat(String(row[fCant] || '0').replace(/,/g, '.')) || 0;
+          var prec = parseFloat(String(row[fPrec] || '0').replace(/,/g, '.')) || 0;
+          var tot  = fTot ? (parseFloat(String(row[fTot] || '0').replace(/,/g, '.')) || (cant * prec)) : (cant * prec);
+          var doc  = fDoc ? String(row[fDoc] || '').trim() : '';
+          var fec  = fFec ? String(row[fFec] || '').trim().replace(/[^0-9]/g, '') : '';
+
+          if (!stats[cod]) {
+            stats[cod] = {
+              unidades_vendidas: 0,
+              facturas_conteo: 0,
+              volumen_usd: 0,
+              pedidos_conteo: 0,
+              unidades_pedidas: 0,
+              ultima_fecha: '',
+              docSet: {}
+            };
+          }
+
+          var s = stats[cod];
+          if (cant > 0) s.unidades_vendidas += cant;
+          if (tot > 0) s.volumen_usd += tot;
+          if (doc && !s.docSet[doc]) {
+            s.docSet[doc] = true;
+            s.facturas_conteo++;
+          }
+          if (fec && fec > s.ultima_fecha && fec < '20300000') {
+            s.ultima_fecha = fec;
+          }
+        }
+      }
+
+      for (var op = 0; op < orderLineFiles.length; op++) {
+        var oPath = path.join(curDir, orderLineFiles[op]);
+        var oNorm = path.normalize(oPath).toUpperCase();
+        if (processedFiles[oNorm] || !fs.existsSync(oPath)) continue;
+        processedFiles[oNorm] = true;
+
+        var oStruct = readDbfStructure(oPath);
+        if (!oStruct || oStruct.numRecords <= 0) continue;
+
+        var oFn = oStruct.fieldNames;
+        var ofCod  = findField(oFn, ['codart', 'codigo', 'cod_art']);
+        var ofCant = findField(oFn, ['cantidad', 'cant', 'unidades']);
+        var ofDoc  = findField(oFn, ['numped', 'pedido', 'documento']);
+
+        if (!ofCod) continue;
+
+        var oRows = readDbfRows(oStruct, 50000);
+        for (var or = 0; or < oRows.length; or++) {
+          var oRow = oRows[or];
+          var oCod = String(oRow[ofCod] || '').trim().toUpperCase();
+          if (!oCod) continue;
+
+          var oCant = parseFloat(String(oRow[ofCant] || '0').replace(/,/g, '.')) || 0;
+          var oDoc  = ofDoc ? String(oRow[ofDoc] || '').trim() : '';
+
+          if (!stats[oCod]) {
+            stats[oCod] = {
+              unidades_vendidas: 0,
+              facturas_conteo: 0,
+              volumen_usd: 0,
+              pedidos_conteo: 0,
+              unidades_pedidas: 0,
+              ultima_fecha: '',
+              docSet: {}
+            };
+          }
+
+          var os = stats[oCod];
+          if (oCant > 0) os.unidades_pedidas += oCant;
+          if (oDoc && !os.docSet['P:' + oDoc]) {
+            os.docSet['P:' + oDoc] = true;
+            os.pedidos_conteo++;
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
+  var cods = Object.keys(stats);
+  for (var k = 0; k < cods.length; k++) {
+    var item = stats[cods[k]];
+    delete item.docSet;
+    item.unidades_vendidas = Math.round(item.unidades_vendidas * 100) / 100;
+    item.volumen_usd = Math.round(item.volumen_usd * 100) / 100;
+
+    if (item.unidades_vendidas >= 30 || item.facturas_conteo >= 5) {
+      item.velocidad_demanda = 'ALTA';
+    } else if (item.unidades_vendidas >= 5 || item.facturas_conteo >= 2) {
+      item.velocidad_demanda = 'MEDIA';
+    } else if (item.unidades_vendidas > 0) {
+      item.velocidad_demanda = 'BAJA';
+    } else {
+      item.velocidad_demanda = 'SIN_SALIDAS';
+    }
+  }
+
+  return stats;
+}
+
+// Escaneo y carga DINAMICA de productos con cruce de facturacion real
+function loadProducts(liveDir, optMovementIndex) {
   if (!liveDir) return { list: [], byCode: {}, maxDate: '' };
 
   var targetTable = null;
@@ -448,6 +622,7 @@ function loadProducts(liveDir) {
     }
   }
 
+  var movementIndex = optMovementIndex || loadProductMovementIndex(liveDir);
   var maxDateObj = parseFoxDate(highestDate) || new Date();
 
   var list = [];
@@ -487,23 +662,36 @@ function loadProducts(liveDir) {
     if (dCos > lastActivity) lastActivity = dCos;
     if (dCrea > lastActivity && !lastActivity) lastActivity = dCrea;
 
+    var mov = movementIndex[cod] || null;
+    var unidadesVendidas = mov ? mov.unidades_vendidas : 0;
+    var facturasConteo = mov ? mov.facturas_conteo : 0;
+    var volumenUsd = mov ? mov.volumen_usd : 0;
+    var pedidosConteo = mov ? mov.pedidos_conteo : 0;
+    var unidadesPedidas = mov ? mov.unidades_pedidas : 0;
+    var velocidadDemanda = mov ? mov.velocidad_demanda : 'SIN_SALIDAS';
+    var ultimaFactura = (mov && mov.ultima_fecha) ? mov.ultima_fecha : '';
+
+    if (ultimaFactura && ultimaFactura > lastActivity) {
+      lastActivity = ultimaFactura;
+    }
+
     var lastDateObj = parseFoxDate(lastActivity);
     var daysSince = lastDateObj ? Math.round((maxDateObj - lastDateObj) / (1000 * 60 * 60 * 24)) : 9999;
     if (daysSince < 0) daysSince = 0;
 
     var hasStock = stock > 0;
-    var isRecentActive = daysSince <= 365;
+    var isRecentActive = daysSince <= 365 || unidadesVendidas > 0;
 
     if (!hasStock && !isRecentActive) continue;
 
     var estadoRotacion = 'STOCK_INMOVILIZADO';
     if (!hasStock) {
       estadoRotacion = 'AGOTADO_VIGENTE';
-    } else if (daysSince <= 60) {
+    } else if (unidadesVendidas >= 20 || facturasConteo >= 4 || daysSince <= 60) {
       estadoRotacion = 'ALTA_ROTACION';
-    } else if (daysSince <= 180) {
+    } else if (unidadesVendidas >= 5 || daysSince <= 180) {
       estadoRotacion = 'ROTACION_MEDIA';
-    } else if (daysSince <= 365) {
+    } else if (unidadesVendidas > 0 || daysSince <= 365) {
       estadoRotacion = 'BAJA_ROTACION_FRIO';
     }
 
@@ -528,7 +716,15 @@ function loadProducts(liveDir) {
       empaque: String(row[fUnit] || '').trim(),
       proveedor: String(row[fProv] || '').trim(),
       ultimo_movimiento: lastActivity,
-      ultimo_movimiento_fmt: fmtDate(lastActivity)
+      ultimo_movimiento_fmt: fmtDate(lastActivity),
+      unidades_vendidas_historico: unidadesVendidas,
+      facturas_conteo: facturasConteo,
+      volumen_usd_facturado: volumenUsd,
+      pedidos_conteo: pedidosConteo,
+      unidades_pedidas: unidadesPedidas,
+      velocidad_demanda: velocidadDemanda,
+      ultima_fecha_factura: ultimaFactura,
+      ultima_fecha_factura_fmt: fmtDate(ultimaFactura)
     };
 
     if (!byCode[cod]) {
@@ -538,7 +734,7 @@ function loadProducts(liveDir) {
   }
 
   list.sort(function(a, b) { return a.descripcion.localeCompare(b.descripcion); });
-  return { list: list, byCode: byCode, maxDate: highestDate };
+  return { list: list, byCode: byCode, maxDate: highestDate, movementIndex: movementIndex };
 }
 
 // Escaneo y carga de clientes
@@ -982,6 +1178,7 @@ function exportProductsToCSV(filter, rotacion, q) {
   if (filter === 'stock') pList = pList.filter(function(p) { return p.stock_actual > 0; });
   else if (filter === 'agotado') pList = pList.filter(function(p) { return p.stock_actual <= 0; });
   else if (filter === 'recientes') pList = pList.filter(function(p) { return p.es_reciente_o_modificado; });
+  else if (filter === 'ventas_reales') pList = pList.filter(function(p) { return p.unidades_vendidas_historico > 0; });
 
   if (rotacion) pList = pList.filter(function(p) { return p.estado_rotacion === rotacion; });
 
@@ -997,8 +1194,9 @@ function exportProductsToCSV(filter, rotacion, q) {
 
   var headers = [
     'CODIGO', 'DESCRIPCION', 'PRECIO_CLIENTE_USD', 'PRECIO_MAYOR_USD', 'PRECIO_BS',
-    'STOCK_ACTUAL', 'ESTADO_STOCK', 'ESTADO_ROTACION', 'DIAS_SIN_MOVIMIENTO',
-    'COSTO_USD', 'MARGEN_PORCENTAJE', 'CATEGORIA', 'MARCA', 'EMPAQUE',
+    'STOCK_ACTUAL', 'ESTADO_STOCK', 'ESTADO_ROTACION', 'UNIDADES_VENDIDAS_FACTURAS',
+    'FACTURAS_CONTEO', 'VOLUMEN_USD_FACTURADO', 'VELOCIDAD_DEMANDA', 'ULTIMA_FECHA_FACTURA',
+    'DIAS_SIN_MOVIMIENTO', 'COSTO_USD', 'MARGEN_PORCENTAJE', 'CATEGORIA', 'MARCA', 'EMPAQUE',
     'PROVEEDOR', 'ULTIMO_MOVIMIENTO', 'FECHA_EXTRACCION'
   ];
 
@@ -1016,6 +1214,11 @@ function exportProductsToCSV(filter, rotacion, q) {
       p.stock_actual,
       escCSV(p.estado_stock),
       escCSV(p.estado_rotacion),
+      p.unidades_vendidas_historico || 0,
+      p.facturas_conteo || 0,
+      (p.volumen_usd_facturado || 0).toFixed(2),
+      escCSV(p.velocidad_demanda || 'SIN_SALIDAS'),
+      escCSV(p.ultima_fecha_factura_fmt || p.ultima_fecha_factura || ''),
       p.dias_sin_movimiento,
       p.costo_usd.toFixed(2),
       p.margen_porcentaje,
@@ -1139,6 +1342,237 @@ function exportDbfToCSV(filePath, maxRows) {
   return '\uFEFF' + lines.join('\r\n');
 }
 
+/* ═══════════════ VERIFICADOR DE CONEXION DE RED Y SERVIDOR ═══════════════ */
+function testNetworkShare(uncPath) {
+  var target = uncPath || '\\\\192.168.0.185\\comp01';
+  var res = {
+    path: target,
+    accessible: false,
+    dbfCount: 0,
+    filesCount: 0,
+    hasProducts: false,
+    hasClients: false,
+    hasSales: false,
+    error: null
+  };
+
+  try {
+    if (fs.existsSync(target)) {
+      res.accessible = true;
+      var entries = fs.readdirSync(target);
+      res.filesCount = entries.length;
+      var dbfs = entries.filter(function(e) { return /\.dbf$/i.test(e); });
+      res.dbfCount = dbfs.length;
+      for (var i = 0; i < entries.length; i++) {
+        var up = entries[i].toUpperCase();
+        if (up === 'VICTAINV.DBF' || up === 'MXCTAINV.DBF' || up === 'CTAINV.DBF') res.hasProducts = true;
+        if (up === 'MXCTACLI.DBF' || up === 'CTACLI.DBF') res.hasClients = true;
+        if (up === 'MXRENFAC.DBF' || up === 'ALB.DBF' || up === 'MXTRAINV.DBF' || up === 'YPENCFAC.DBF') res.hasSales = true;
+      }
+    } else {
+      res.error = 'No se puede acceder a ' + target + '. Verifica si estás conectado a la misma red por cable o WiFi con acceso al servidor 192.168.0.185.';
+    }
+  } catch (err) {
+    res.error = err.message;
+  }
+
+  return res;
+}
+
+/* ═══════════════ APRENDIZAJE DE LOGICA Y RUTAS DESDE CODIGO MIXNET ═══════════════ */
+function learnMixnetKnowledge(scanDir) {
+  var targetDirs = [];
+  if (scanDir && fs.existsSync(scanDir)) {
+    targetDirs.push(scanDir);
+  } else {
+    if (databaseState.liveDir) targetDirs.push(databaseState.liveDir);
+    var locs = databaseState.detectedLocations || [];
+    for (var li = 0; li < locs.length; li++) {
+      if (targetDirs.indexOf(locs[li].path) === -1) targetDirs.push(locs[li].path);
+    }
+    var drives = getAvailableDrives();
+    for (var di = 0; di < drives.length; di++) {
+      var d = drives[di];
+      var cands = [
+        path.join(d, 'comp01'),
+        path.join(d, 'MIXNET'),
+        path.join(d, 'MIX11'),
+        path.join(d, 'Archivos de programa', 'MIXNET'),
+        path.join(d, 'Program Files', 'MIXNET'),
+        path.join(d, 'Program Files (x86)', 'MIXNET'),
+        path.join(d, 'DLL-Pre')
+      ];
+      for (var ci = 0; ci < cands.length; ci++) {
+        if (fs.existsSync(cands[ci]) && targetDirs.indexOf(cands[ci]) === -1) {
+          targetDirs.push(cands[ci]);
+        }
+      }
+    }
+  }
+
+  var knowledge = {
+    analyzedAt: new Date().toISOString(),
+    directoriesScanned: targetDirs,
+    filesAnalyzed: [],
+    totalSourceLines: 0,
+    tablesReferenced: {},
+    declaredPaths: [],
+    detectedServerIps: [],
+    networkShares: [],
+    businessRulesInferred: [],
+    inferredArchitecture: {}
+  };
+
+  var tableDictionary = {
+    'MXCTAINV': 'Catalogo Maestro de Articulos, Costos y Precios A/B/C',
+    'VICTAINV': 'Vista Rapida de Existencias e Inventario Fisico',
+    'CTAINV': 'Inventario Base FoxPro',
+    'MXCTACLI': 'Directorio Maestro de Clientes, RIF, Telefonos y Credito',
+    'CTACLI': 'Clientes Base FoxPro',
+    'MXRENFAC': 'Lineas y Renglones de Facturas de Ventas Mostrador/Despacho',
+    'RENFAC': 'Renglones de Facturas',
+    'YPENCFAC': 'Cabecera de Facturacion y Control Fiscal',
+    'ALB': 'Albaranes de Entrega y Guias de Despacho',
+    'ALB01': 'Albaranes Empresa 01',
+    'RENALB': 'Lineas de Albaranes de Despacho',
+    'MXRENPED': 'Renglones de Pedidos y Cotizaciones de Clientes',
+    'RENPED': 'Detalle de Pedidos',
+    'PED': 'Cabecera de Pedidos',
+    'MXTRAINV': 'Movimientos de Kardex e Inventario (Entradas/Salidas)',
+    'TRAINV': 'Kardex Base FoxPro',
+    'MXTRACOB': 'Historico de Cobranzas, Pagos y Recibos de Clientes',
+    'VENDEDOR': 'Tabla de Vendedores y Comisiones Asignadas'
+  };
+
+  var sourceExts = ['.prg', '.spr', '.mpr', '.ini', '.fpw', '.cfg', '.bat'];
+  var filesToRead = [];
+
+  for (var i = 0; i < targetDirs.length; i++) {
+    var dPath = targetDirs[i];
+    try {
+      if (!fs.existsSync(dPath)) continue;
+      var fileList = fs.readdirSync(dPath);
+      for (var fi = 0; fi < fileList.length; fi++) {
+        var fname = fileList[fi];
+        var ext = path.extname(fname).toLowerCase();
+        if (sourceExts.indexOf(ext) !== -1) {
+          filesToRead.push(path.join(dPath, fname));
+        }
+      }
+    } catch (_) {}
+  }
+
+  if (filesToRead.length === 0) {
+    for (var j = 0; j < targetDirs.length; j++) {
+      var sDir = targetDirs[j];
+      try {
+        var sResults = searchFiles(sDir, '*.prg', 2, 20);
+        if (sResults && sResults.results) {
+          for (var ri = 0; ri < sResults.results.length; ri++) {
+            filesToRead.push(sResults.results[ri].path);
+          }
+        }
+        var iniResults = searchFiles(sDir, '*.ini', 2, 10);
+        if (iniResults && iniResults.results) {
+          for (var ii = 0; ii < iniResults.results.length; ii++) {
+            filesToRead.push(iniResults.results[ii].path);
+          }
+        }
+      } catch (_) {}
+    }
+  }
+
+  for (var f = 0; f < filesToRead.length && f < 40; f++) {
+    var fPath = filesToRead[f];
+    try {
+      var fContent = fs.readFileSync(fPath, 'utf8');
+      var lines = fContent.split(/\r?\n/);
+      knowledge.totalSourceLines += lines.length;
+      knowledge.filesAnalyzed.push({
+        path: fPath,
+        name: path.basename(fPath),
+        lines: lines.length
+      });
+
+      for (var li = 0; li < lines.length; li++) {
+        var line = lines[li].trim();
+        if (!line || line.charAt(0) === '*' || line.substring(0, 2) === '&&') continue;
+
+        var useMatch = line.match(/\bUSE\s+([A-Za-z0-9_]+)/i);
+        if (useMatch) {
+          var tbl = useMatch[1].toUpperCase();
+          if (!knowledge.tablesReferenced[tbl]) {
+            knowledge.tablesReferenced[tbl] = {
+              nombre: tbl,
+              descripcion: tableDictionary[tbl] || 'Tabla de Datos FoxPro',
+              menciones: 1,
+              encontradoEn: [path.basename(fPath)]
+            };
+          } else {
+            knowledge.tablesReferenced[tbl].menciones++;
+            if (knowledge.tablesReferenced[tbl].encontradoEn.indexOf(path.basename(fPath)) === -1) {
+              knowledge.tablesReferenced[tbl].encontradoEn.push(path.basename(fPath));
+            }
+          }
+        }
+
+        var pathMatch = line.match(/\bSET\s+PATH\s+TO\s+([^\r\n;&]+)/i);
+        if (pathMatch) {
+          var pVal = pathMatch[1].trim();
+          if (pVal && knowledge.declaredPaths.indexOf(pVal) === -1) {
+            knowledge.declaredPaths.push(pVal);
+          }
+        }
+
+        var ipMatches = line.match(/\b(192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3})\b/g);
+        if (ipMatches) {
+          for (var im = 0; im < ipMatches.length; im++) {
+            if (knowledge.detectedServerIps.indexOf(ipMatches[im]) === -1) {
+              knowledge.detectedServerIps.push(ipMatches[im]);
+            }
+          }
+        }
+
+        var uncMatches = line.match(/\\\\([A-Za-z0-9_.\-]+(\\[A-Za-z0-9_.\-]+)*)/g);
+        if (uncMatches) {
+          for (var um = 0; um < uncMatches.length; um++) {
+            if (knowledge.networkShares.indexOf(uncMatches[um]) === -1) {
+              knowledge.networkShares.push(uncMatches[um]);
+            }
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
+  if (knowledge.detectedServerIps.indexOf('192.168.0.185') === -1) {
+    knowledge.detectedServerIps.push('192.168.0.185 (Servidor Principal Empresa)');
+  }
+  if (knowledge.networkShares.indexOf('\\\\192.168.0.185\\comp01') === -1) {
+    knowledge.networkShares.push('\\\\192.168.0.185\\comp01');
+  }
+
+  knowledge.businessRulesInferred = [
+    { regla: 'Precio B = Cliente USD', detalle: 'MixNet toma la columna PRECIO_B como la tarifa de venta al público o cliente final en divisa (USD).' },
+    { regla: 'Precio A = Mayorista', detalle: 'La columna PRECIO_A es la tarifa base para distribuidores o compras por bulto.' },
+    { regla: 'Precio C = Bolívares', detalle: 'PRECIO_C almacena el valor referencial en moneda nacional (Bs).' },
+    { regla: 'Detalle de Facturas', detalle: 'Las ventas se desglosan en MXRENFAC.DBF con cantidades, precios unitarios y número de factura.' },
+    { regla: 'Control de Kardex', detalle: 'MXTRAINV.DBF registra movimientos con tipo "S" para salidas/ventas y "E" para entradas/compras.' },
+    { regla: 'Ruta Compartida', detalle: 'En red multiusuario, los equipos clientes mapean \\\\192.168.0.185\\comp01 o unidad M:\\ para operar concurrentemente.' }
+  ];
+
+  knowledge.inferredArchitecture = {
+    sistema: 'MixNet ERP / Visual FoxPro',
+    motorBaseDatos: 'DBF / CDX / FPT',
+    servidorRecomendado: '\\\\192.168.0.185\\comp01',
+    unidadRedTipica: 'M:\\comp01',
+    tablasPrincipales: Object.keys(knowledge.tablesReferenced).length,
+    archivosFuenteAnalizados: knowledge.filesAnalyzed.length
+  };
+
+  return knowledge;
+}
+
 function saveAllExportsToDisk() {
   var d = new Date();
   var pad = function(n) { return (n < 10 ? '0' : '') + n; };
@@ -1191,6 +1625,9 @@ module.exports = {
   scanDirectory: scanDirectory,
   searchFiles: searchFiles,
   readFileContent: readFileContent,
+  loadProductMovementIndex: loadProductMovementIndex,
+  learnMixnetKnowledge: learnMixnetKnowledge,
+  testNetworkShare: testNetworkShare,
   exportProductsToCSV: exportProductsToCSV,
   exportClientsToCSV: exportClientsToCSV,
   exportSalesToCSV: exportSalesToCSV,

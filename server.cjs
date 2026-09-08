@@ -157,6 +157,8 @@ var server = http.createServer(function(req, res) {
       pList = pList.filter(function(p) { return p.stock_actual <= 0; });
     } else if (filter === 'recientes') {
       pList = pList.filter(function(p) { return p.es_reciente_o_modificado; });
+    } else if (filter === 'ventas_reales') {
+      pList = pList.filter(function(p) { return p.unidades_vendidas_historico > 0; });
     }
 
     if (rotacion) {
@@ -397,6 +399,70 @@ var server = http.createServer(function(req, res) {
           sendJSON(res, 200, agentResult);
         }
       });
+    });
+    return;
+  }
+
+  // 14. Consulta SIMULTANEA a los 7 Agentes a la Vez (Paralelo con 7 Llaves)
+  if (pathname === '/api/chat/parallel' && req.method === 'POST') {
+    parseBody(req, function(err, payload) {
+      if (err || !payload.prompt) {
+        sendJSON(res, 400, { error: 'Se requiere un prompt para la auditoría simultánea.' });
+        return;
+      }
+
+      var prompt = payload.prompt;
+      var dbState = engine.getState();
+      var enrichedContext = {
+        empresa_directorio: dbState.liveDir || 'No conectado',
+        fecha_maxima_sistema: dbState.maxSystemDateFmt || 'No detectada',
+        total_productos_en_catalogo: dbState.products.length,
+        productos_con_stock_fisico: dbState.summary.productos_en_stock || 0,
+        productos_con_salidas_reales: dbState.products.filter(function(p) { return p.unidades_vendidas_historico > 0; }).length,
+        total_clientes_cartera: dbState.clients.length,
+        clientes_con_whatsapp: dbState.summary.clientes_con_whatsapp || 0,
+        ventas_recientes_en_memoria: dbState.recentSales.length,
+        top_productos_mas_vendidos: dbState.products.filter(function(p) { return p.unidades_vendidas_historico > 0; }).sort(function(a, b) {
+          return b.unidades_vendidas_historico - a.unidades_vendidas_historico;
+        }).slice(0, 10).map(function(p) {
+          return p.codigo + ' - ' + p.descripcion + ' (Vendidas: ' + p.unidades_vendidas_historico + ' un, $' + p.precio_cliente_usd + ', Vol: $' + p.volumen_usd_facturado + ')';
+        }),
+        top_productos_alta_rotacion: dbState.products.filter(function(p) { return p.estado_rotacion === 'ALTA_ROTACION'; }).slice(0, 10).map(function(p) {
+          return p.codigo + ' - ' + p.descripcion + ' ($' + p.precio_cliente_usd + ', Stock: ' + p.stock_actual + ')';
+        }),
+        ultimas_ventas_muestras: dbState.recentSales.slice(0, 5)
+      };
+
+      agents.askAll7AgentsSimultaneous(prompt, enrichedContext, function(agentErr, batchResult) {
+        if (agentErr) {
+          sendJSON(res, 500, { error: agentErr.message });
+        } else {
+          sendJSON(res, 200, batchResult);
+        }
+      });
+    });
+    return;
+  }
+
+  // 15. Conocimiento Aprendido del Código Fuente y Configuración MixNet
+  if (pathname === '/api/learned-knowledge') {
+    var kScanPath = query.path || engine.getState().liveDir;
+    var learned = engine.learnMixnetKnowledge(kScanPath);
+    sendJSON(res, 200, learned);
+    return;
+  }
+
+  // 16. Verificación y Prueba de Conexión de Red / Servidor UNC (192.168.0.185)
+  if (pathname === '/api/network/test-unc' && req.method === 'POST') {
+    parseBody(req, function(err, payload) {
+      var uncTarget = (payload && payload.path) ? payload.path : '\\\\192.168.0.185\\comp01';
+      var testRes = engine.testNetworkShare(uncTarget);
+      if (testRes.accessible && payload && payload.autoConnect) {
+        var switchRes = engine.switchDatabaseDirectory(uncTarget);
+        testRes.autoConnected = switchRes.success;
+        testRes.summary = switchRes.summary;
+      }
+      sendJSON(res, 200, testRes);
     });
     return;
   }

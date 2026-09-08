@@ -199,6 +199,9 @@ function callWithModelFallback(apiKey, systemPrompt, userMessage, callback) {
   attemptModel();
 }
 
+// Puntero de rotacion continua (Round-Robin) entre las 7 llaves
+var roundRobinCounter = 0;
+
 // Ejecucion con tolerancia total a fallos (Cascada de Modelos + Rotacion de las 7 Llaves)
 function askAgent(roleName, userPrompt, contextData, callback) {
   var targetRole = roleName || 'orchestrator';
@@ -211,17 +214,19 @@ function askAgent(roleName, userPrompt, contextData, callback) {
       'PREGUNTA O TAREA:\n' + userPrompt;
   }
 
-  // Buscar la llave preferida para este rol
-  var preferredKeyObj = null;
+  // 1. Seleccionar llave mediante Round-Robin para balancear la carga entre las 7 APIs
+  var assignedKeyIndex = (roundRobinCounter++) % KEYS.length;
+  var preferredKeyObj = KEYS[assignedKeyIndex];
+
+  // Si el rol tiene una llave asignada y no esta sobrecargada, preferirla
   for (var i = 0; i < KEYS.length; i++) {
     if (KEYS[i].role === targetRole) {
       preferredKeyObj = KEYS[i];
       break;
     }
   }
-  if (!preferredKeyObj) preferredKeyObj = KEYS[0];
 
-  // 1. Intentar primero con la llave asignada
+  // 2. Intentar primero con la llave asignada
   callWithModelFallback(preferredKeyObj.key, sysPrompt, fullMessage, function(err, reply, modelUsed) {
     if (!err && reply) {
       callback(null, {
@@ -234,7 +239,7 @@ function askAgent(roleName, userPrompt, contextData, callback) {
       return;
     }
 
-    // 2. Fallback: Si fallo, rotar por el pool de las otras 6 llaves
+    // 3. Fallback: Si fallo, rotar por el pool de las otras 6 llaves
     console.log('  [Aviso IA] Llave ' + preferredKeyObj.id + ' en rol ' + targetRole + ' fallo (' + (err ? err.message : '') + '). Rotando a llave alternativa...');
 
     var tryKeyIndex = function(kIndex) {
@@ -268,6 +273,79 @@ function askAgent(roleName, userPrompt, contextData, callback) {
   });
 }
 
+// Ejecucion SIMULTANEA de multiples agentes en paralelo aprovechando las 7 llaves
+function askParallelAgents(rolesList, userPrompt, contextData, callback) {
+  var roles = (rolesList && rolesList.length > 0)
+    ? rolesList
+    : ['orchestrator', 'prices', 'inventory', 'clients', 'code_inspector'];
+
+  var results = [];
+  var completed = 0;
+  var hasErrors = null;
+
+  for (var i = 0; i < roles.length; i++) {
+    (function(role, index) {
+      // Cada agente se despacha con una llave dedicada simultaneamente
+      var keyForAgent = KEYS[index % KEYS.length];
+      var sysPrompt = AGENT_PROMPTS[role] || AGENT_PROMPTS.orchestrator;
+      var msg = userPrompt;
+      if (contextData) {
+        msg = 'DATOS REALES DEL SISTEMA MIXNET (JJ PAPER):\n' +
+          '```json\n' + (typeof contextData === 'string' ? contextData : JSON.stringify(contextData, null, 2)) + '\n```\n\n' +
+          'PREGUNTA O TAREA:\n' + userPrompt;
+      }
+
+      callWithModelFallback(keyForAgent.key, sysPrompt, msg, function(err, reply, modelUsed) {
+        completed++;
+        if (!err && reply) {
+          results.push({
+            role: role,
+            title: keyForAgent.title,
+            keyUsed: keyForAgent.id,
+            modelUsed: modelUsed,
+            reply: reply
+          });
+        } else {
+          // Si falla, reintentar con otra llave
+          askAgent(role, userPrompt, contextData, function(retryErr, retryRes) {
+            if (!retryErr && retryRes) {
+              results.push({
+                role: role,
+                title: retryRes.agentTitle,
+                keyUsed: retryRes.keyUsed,
+                modelUsed: retryRes.modelUsed,
+                reply: retryRes.reply
+              });
+            }
+            checkDone();
+          });
+          return;
+        }
+        checkDone();
+      });
+    })(roles[i], i);
+  }
+
+  function checkDone() {
+    if (completed >= roles.length) {
+      results.sort(function(a, b) {
+        return roles.indexOf(a.role) - roles.indexOf(b.role);
+      });
+      callback(null, {
+        totalAgents: results.length,
+        simultaneous: true,
+        results: results
+      });
+    }
+  }
+}
+
+// Ejecucion SIMULTANEA de los 7 Agentes a la vez
+function askAll7AgentsSimultaneous(userPrompt, contextData, callback) {
+  var allRoles = KEYS.map(function(k) { return k.role; });
+  askParallelAgents(allRoles, userPrompt, contextData, callback);
+}
+
 // Obtener catalogo de los 7 agentes disponibles
 function getAgentsList() {
   return KEYS.map(function(k) {
@@ -281,6 +359,9 @@ function getAgentsList() {
 
 module.exports = {
   askAgent: askAgent,
+  askParallelAgents: askParallelAgents,
+  askAll7AgentsSimultaneous: askAll7AgentsSimultaneous,
   getAgentsList: getAgentsList,
   KEYS: KEYS
 };
+

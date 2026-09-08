@@ -233,6 +233,10 @@ function loadStatusAndData() {
       }
 
       loadDashboardMinis();
+      // Pre-cargar pestañas para que ninguna quede en estado "Cargando..."
+      loadProducts();
+      loadClients();
+      loadSales();
     })
     .catch(function(err) {
       badge.className = 'status-badge connecting';
@@ -298,7 +302,7 @@ function loadDashboardMinis() {
 // ─── TABLA DE PRODUCTOS (CON ROTACION Y NOVEDADES) ───
 function loadProducts() {
   var tbody = document.getElementById('tbody-products');
-  tbody.innerHTML = '<tr class="table-loading-row"><td colspan="12">⏳ Cargando productos desde la base de datos...</td></tr>';
+  tbody.innerHTML = '<tr class="table-loading-row"><td colspan="14">⏳ Cargando productos desde la base de datos...</td></tr>';
 
   var prodSearch = document.getElementById('prod-search');
   var q = prodSearch ? prodSearch.value.trim() : '';
@@ -314,7 +318,7 @@ function loadProducts() {
     .then(function(data) {
       allProducts = data.products || [];
       if (allProducts.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="12" class="text-center" style="padding:30px;">' +
+        tbody.innerHTML = '<tr><td colspan="14" class="text-center" style="padding:30px;">' +
           'No se encontraron productos con ese criterio.<br>' +
           '<small class="text-muted">Si no has conectado la base de datos de MixNet, ve a la pestaña "💻 Código & Explorador" y selecciona la carpeta con tus archivos .DBF.</small>' +
         '</td></tr>';
@@ -344,6 +348,14 @@ function loadProducts() {
 
         var novedadIcon = p.es_reciente_o_modificado ? ' <span title="Modificado recientemente" style="color:#fbbf24;">✨</span>' : '';
 
+        var salidasCell = p.unidades_vendidas_historico > 0
+          ? '<span class="badge badge-stock" title="' + p.facturas_conteo + ' facturas/movimientos">🔥 ' + p.unidades_vendidas_historico + ' un</span>'
+          : '<span class="text-muted small">0 un</span>';
+
+        var volCell = p.volumen_usd_facturado > 0
+          ? '<strong>$' + p.volumen_usd_facturado.toFixed(2) + '</strong>'
+          : '<span class="text-muted small">$0.00</span>';
+
         html += '<tr>' +
           '<td><code>' + escapeHtml(p.codigo) + '</code></td>' +
           '<td><strong>' + escapeHtml(p.descripcion) + '</strong>' + novedadIcon + '</td>' +
@@ -353,6 +365,8 @@ function loadProducts() {
           '<td>' + p.stock_actual + '</td>' +
           '<td><span class="badge ' + badgeStockClass + '">' + badgeStockText + '</span></td>' +
           '<td><span class="badge ' + badgeRotClass + '">' + badgeRotText + '</span></td>' +
+          '<td>' + salidasCell + '</td>' +
+          '<td>' + volCell + '</td>' +
           '<td>' + (p.dias_sin_movimiento < 9000 ? p.dias_sin_movimiento + ' d' : '--') + '</td>' +
           '<td>$' + p.costo_usd.toFixed(2) + '</td>' +
           '<td>' + (p.margen_porcentaje > 0 ? p.margen_porcentaje + '%' : '--') + '</td>' +
@@ -362,7 +376,7 @@ function loadProducts() {
       tbody.innerHTML = html;
     })
     .catch(function(err) {
-      tbody.innerHTML = '<tr><td colspan="12" class="text-center text-danger" style="padding:30px;">' +
+      tbody.innerHTML = '<tr><td colspan="14" class="text-center text-danger" style="padding:30px;">' +
         'Error cargando productos: ' + escapeHtml(err.message) + '<br>' +
         '<button class="btn btn-secondary btn-sm" onclick="loadProducts()" style="margin-top:10px;">Reintentar</button>' +
       '</td></tr>';
@@ -1126,6 +1140,194 @@ function exportAllToDisk() {
     })
     .catch(function(err) {
       alert('Error guardando archivos CSV: ' + err.message);
+    });
+}
+
+// ─── CONEXION POR RED Y SERVIDOR (192.168.0.185) ───
+function testUncConnection() {
+  var uncInput = document.getElementById('unc-path-input');
+  var target = uncInput ? uncInput.value.trim() : '\\\\192.168.0.185\\comp01';
+  var btn = document.getElementById('btn-test-unc');
+  if (btn) { btn.disabled = true; btn.innerText = '⏳ Probando...'; }
+
+  fetch('/api/network/test-unc', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path: target, autoConnect: false })
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(res) {
+      if (res.accessible) {
+        alert('✔ ¡Servidor y ruta accesibles con éxito!\n\nRuta: ' + res.path + '\nArchivos detectados: ' + res.filesCount + '\nTablas DBF: ' + res.dbfCount + '\nInventario: ' + (res.hasProducts ? 'SÍ' : 'NO') + '\nClientes: ' + (res.hasClients ? 'SÍ' : 'NO') + '\nVentas: ' + (res.hasSales ? 'SÍ' : 'NO'));
+      } else {
+        alert('⚠️ No se pudo acceder a la ruta de red:\n\n' + (res.error || 'Ruta inaccesible') + '\n\nRevisa si tu equipo está en la misma red cableada/WiFi que el servidor 192.168.0.185.');
+      }
+    })
+    .catch(function(err) {
+      alert('Error probando conexión: ' + err.message);
+    })
+    .finally(function() {
+      if (btn) { btn.disabled = false; btn.innerText = '🔌 Probar Red (192.168.0.185)'; }
+    });
+}
+
+function connectUncDirectory() {
+  var uncInput = document.getElementById('unc-path-input');
+  var target = uncInput ? uncInput.value.trim() : '\\\\192.168.0.185\\comp01';
+  var btn = document.getElementById('btn-connect-unc');
+  if (btn) { btn.disabled = true; btn.innerText = '⏳ Conectando...'; }
+
+  fetch('/api/network/test-unc', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path: target, autoConnect: true })
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(res) {
+      if (res.accessible && res.autoConnected) {
+        alert('✔ ¡Conexión establecida exitosamente con el servidor ' + target + '!\n\nCatálogo de productos, clientes y facturas cargados en memoria.');
+        loadStatusAndData();
+        loadProducts();
+        loadClients();
+        loadSales();
+      } else {
+        alert('⚠️ No se pudo conectar a ' + target + ':\n' + (res.error || 'Ruta no accesible.'));
+      }
+    })
+    .catch(function(err) {
+      alert('Error conectando: ' + err.message);
+    })
+    .finally(function() {
+      if (btn) { btn.disabled = false; btn.innerText = '⚡ Conectar como BD'; }
+    });
+}
+
+// ─── APRENDIZAJE DE LOGICA MIXNET (.PRG, .INI, RUTAS) ───
+function loadLearnedKnowledge() {
+  var card = document.getElementById('learned-knowledge-card');
+  var body = document.getElementById('learned-knowledge-body');
+  if (!card || !body) return;
+
+  card.style.display = 'block';
+  body.innerHTML = '<p class="text-muted">⏳ Analizando código fuente FoxPro (.PRG), configuración (.INI) y esquemas de tablas...</p>';
+
+  var pVal = document.getElementById('explorer-path') ? document.getElementById('explorer-path').value.trim() : '';
+  var url = '/api/learned-knowledge' + (pVal ? '?path=' + encodeURIComponent(pVal) : '');
+
+  fetch(url)
+    .then(function(r) { return r.json(); })
+    .then(function(k) {
+      var html = '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:16px;">';
+
+      html += '<div class="card" style="padding:12px; background:#1c1d22;">' +
+        '<h4 style="margin-top:0; color:#38bdf8;">🖥️ Arquitectura Detectada</h4>' +
+        '<ul style="margin:0; padding-left:20px; font-size:13px; line-height:1.6;">' +
+          '<li><strong>Motor:</strong> ' + escapeHtml(k.inferredArchitecture.sistema || 'MixNet ERP') + '</li>' +
+          '<li><strong>Base de Datos:</strong> ' + escapeHtml(k.inferredArchitecture.motorBaseDatos || 'DBF / CDX') + '</li>' +
+          '<li><strong>Servidor de Red:</strong> <code>' + escapeHtml((k.detectedServerIps || []).join(', ') || '192.168.0.185') + '</code></li>' +
+          '<li><strong>Ruta Compartida (UNC):</strong> <code>' + escapeHtml((k.networkShares || []).join(', ') || '\\\\192.168.0.185\\comp01') + '</code></li>' +
+          '<li><strong>Líneas de Código Analizadas:</strong> ' + k.totalSourceLines + '</li>' +
+        '</ul>' +
+      '</div>';
+
+      html += '<div class="card" style="padding:12px; background:#1c1d22;">' +
+        '<h4 style="margin-top:0; color:#4ade80;">📁 Tablas MixNet Identificadas</h4>' +
+        '<div style="max-height:180px; overflow-y:auto; font-size:12px;">';
+      var tblKeys = Object.keys(k.tablesReferenced || {});
+      if (tblKeys.length === 0) {
+        html += '<p class="text-muted">Tablas estándar FoxPro: MXCTAINV, MXCTACLI, MXRENFAC, ALB, MXTRAINV</p>';
+      } else {
+        html += '<table class="data-table" style="font-size:11px;"><thead><tr><th>Tabla</th><th>Descripción</th><th>Menciones</th></tr></thead><tbody>';
+        tblKeys.forEach(function(tk) {
+          var t = k.tablesReferenced[tk];
+          html += '<tr><td><code>' + escapeHtml(t.nombre) + '</code></td><td>' + escapeHtml(t.descripcion) + '</td><td>' + t.menciones + '</td></tr>';
+        });
+        html += '</tbody></table>';
+      }
+      html += '</div></div>';
+
+      html += '<div class="card" style="padding:12px; background:#1c1d22;">' +
+        '<h4 style="margin-top:0; color:#fbbf24;">⚡ Reglas de Negocio en Código</h4>' +
+        '<ul style="margin:0; padding-left:20px; font-size:12px; line-height:1.6;">';
+      (k.businessRulesInferred || []).forEach(function(br) {
+        html += '<li><strong>' + escapeHtml(br.regla) + ':</strong> ' + escapeHtml(br.detalle) + '</li>';
+      });
+      html += '</ul></div>';
+
+      html += '</div>';
+      body.innerHTML = html;
+    })
+    .catch(function(err) {
+      body.innerHTML = '<p class="text-danger">Error aprendiendo lógica: ' + escapeHtml(err.message) + '</p>';
+    });
+}
+
+// ─── AUDITORIA SIMULTANEA DE LOS 7 AGENTES A LA VEZ ───
+function runSimultaneous7Audit() {
+  var chatInput = document.getElementById('chat-input');
+  var promptVal = (chatInput && chatInput.value.trim())
+    ? chatInput.value.trim()
+    : 'Realiza una auditoría completa de JJ Paper: precios oficiales cliente (Precio B USD), rotación de mercadería según facturación real, clientes clave y recomendaciones directas.';
+
+  var btn = document.getElementById('btn-audit-simultaneous');
+  if (btn) { btn.disabled = true; btn.innerText = '⚡ Ejecutando 7 Agentes a la Vez...'; }
+
+  var container = document.getElementById('simultaneous-audit-container');
+  var grid = document.getElementById('simultaneous-cards-grid');
+  if (container && grid) {
+    container.style.display = 'block';
+    grid.innerHTML = '<div style="grid-column:1/-1; text-align:center; padding:30px;"><div class="agent-thinking">⚡ Consultando en paralelo a los 7 especialistas usando las 7 llaves Gemini...</div></div>';
+  }
+
+  fetch('/api/chat/parallel', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt: promptVal })
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(res) {
+      if (!res.results || res.results.length === 0) {
+        if (grid) grid.innerHTML = '<div style="grid-column:1/-1; color:#ef4444; padding:20px;">No se obtuvieron respuestas de los agentes.</div>';
+        return;
+      }
+
+      var icons = {
+        orchestrator: '👑',
+        prices: '💰',
+        inventory: '📦',
+        clients: '👥',
+        orders: '📝',
+        marketing: '📢',
+        code_inspector: '🔍'
+      };
+
+      var html = '';
+      res.results.forEach(function(ag) {
+        var icon = icons[ag.role] || '🤖';
+        html += '<div class="card" style="padding:14px; background:#18181b; border:1px solid rgba(255,255,255,0.1); display:flex; flex-direction:column; justify-content:space-between;">' +
+          '<div>' +
+            '<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px;">' +
+              '<h4 style="margin:0; font-size:14px; color:#fff;">' + icon + ' ' + escapeHtml(ag.title) + '</h4>' +
+              '<span class="badge" style="font-size:10px;">Llave #' + ag.keyUsed + '</span>' +
+            '</div>' +
+            '<div style="font-size:12px; line-height:1.5; color:#d4d4d8; max-height:260px; overflow-y:auto; padding-right:4px;">' +
+              formatMarkdown(ag.reply) +
+            '</div>' +
+          '</div>' +
+          '<div style="margin-top:10px; padding-top:8px; border-top:1px solid rgba(255,255,255,0.06); font-size:11px; color:#a1a1aa; display:flex; justify-content:space-between;">' +
+            '<span>Modelo: ' + escapeHtml(ag.modelUsed || 'gemini-flash') + '</span>' +
+            '<button class="btn-link" style="font-size:11px;" onclick="selectAgent(\'' + ag.role + '\')">Conversar a solas →</button>' +
+          '</div>' +
+        '</div>';
+      });
+
+      if (grid) grid.innerHTML = html;
+    })
+    .catch(function(err) {
+      if (grid) grid.innerHTML = '<div style="grid-column:1/-1; color:#ef4444; padding:20px;">Error ejecutando auditoría simultánea: ' + escapeHtml(err.message) + '</div>';
+    })
+    .finally(function() {
+      if (btn) { btn.disabled = false; btn.innerText = '⚡ Auditoría Simultánea (7 a la Vez)'; }
     });
 }
 
