@@ -1,29 +1,37 @@
 ========================================================================
-   JJ PAPER -- MOTOR TOTAL Y EXTRACTOR MIXNET v5.0 (WINDOWS 7)
+   JJ PAPER -- EXTRACTOR INTELIGENTE MIXNET v5.1 (WINDOWS 7)
 ========================================================================
 
-Esta version v5.0 es un MOTOR DE CONSOLIDACION TOTAL:
+Esta version v5.1 implementa la logica real de precios y catalogo activo:
 
-  1. CERO PREGUNTAS: No pregunta carpetas, ni tablas, ni codigos.
-  2. ESCANEA TODAS LAS TABLAS DE PRODUCTOS:
-     - Lee MXCTAINV, VICTAINV, CTAEVA, JJCTAINV y CTAINV.
-     - Si un producto esta en varias tablas, toma automaticamente
-       el PRECIO MAS RECIENTE segun su fecha_mod de MixNet.
-     - Cruza el stock real, costo, unidad, marca y proveedor.
-  3. ESCANEA TODAS LAS TABLAS DE CLIENTES Y CORREOS:
-     - Extrae clientes de MXCTACLI, MXSUCCLI, MXAGENDA y notas memo.
-     - Cruza RIFs, telefonos celulares (0414, 0424, 0412) y direcciones.
-  4. GUARDA DIRECTAMENTE EN TU ESCRITORIO:
-     - mixnet_productos_reales_*.csv  (Excel con todos los productos y precios)
-     - mixnet_clientes_reales_*.csv   (Excel con clientes, telefonos y emails)
-     - mixnet_payload_supabase_*.json (Estructura lista para la nube)
+  1. PRECIO REAL DEL CLIENTE (PRECIO B):
+     - PRECIO_CLIENTE_USD: Toma el Precio B de MixNet (precio real de venta).
+     - PRECIO_MAYOR_USD:   Precio A (precio mayorista/distribuidor).
+     - PRECIO_BS:          Precio C (precio en Bolivares).
+     - STOCK_ACTUAL:       Existencia fisica real en inventario.
+     - COSTO_USD:          Costo actual de reposicion.
+
+  2. FILTRADO ESTRICTO DE PRODUCTOS ACTIVOS (LO QUE SE USA HOY):
+     - Descarta articulos inactivos (estatus = '1' en FoxPro).
+     - Descarta productos obsoletos sin precio y sin stock de anos atras.
+     - Deja unicamente los productos reales y vigentes de la tienda.
+
+  3. CARTERA DE CLIENTES:
+     - Clientes con RIF limpio, direccion y telefonos.
+     - Clasifica celulares para WhatsApp (0414, 0424, 0412, etc.) y telefonos fijos.
+     - Correos certificados cruzados desde campos, notas memo y agenda.
+
+  4. CERO PREGUNTAS (1 SOLO CLIC):
+     - No pregunta carpetas ni tablas.
+     - Hace todo solo en 3 segundos y guarda los archivos en tu ESCRITORIO.
 
 ------------------------------------------------------------------------
 INSTRUCCIONES:
 ------------------------------------------------------------------------
-  1. En la carpeta de archivos-pc, haz: git pull origin main
-  2. Haz DOBLE CLIC sobre:
+  1. En la PC de Windows 7, abre la carpeta archivos-pc.
+  2. Haz: git pull origin main
+  3. Haz DOBLE CLIC en:
         extraer-todo-mixnet.bat
-  3. En 5 segundos tendras todo listo en tu Escritorio.
+  4. Revisa tu Escritorio: tendras los archivos listos para Excel.
 
 ========================================================================

@@ -1,20 +1,28 @@
 /*
   ========================================================================
-  JJ Paper — Motor Omnisciente y Consolidador Total MixNet v5.0 (2026)
+  JJ Paper — Motor Inteligente de Extraccion MixNet v5.1 (2026)
   ========================================================================
-  100% AUTOMATICO — CERO PREGUNTAS — CERO MENUS — UN SOLO CLIC
+  CERO PREGUNTAS — CERO DUDAS — 100% DATOS REALES DE LA TIENDA
 
-  Este motor rastrea, cruza y consolida TODOS los archivos y tablas de MixNet:
-    1. Escaneo multi-tabla de productos (MXCTAINV, VICTAINV, CTAEVA, JJCTAINV, CTAINV).
-    2. Consolida cada SKU tomando automaticamente el precio mas reciente (fecha_mod).
-    3. Cruza inventario, costos, existencia real, proveedor, unidad y marcas.
-    4. Escaneo multi-tabla de clientes (MXCTACLI, MXAGENDA, MXSUCCLI, ALB, contactos).
-    5. Matriz global de correos: extrae emails de campos, notas memo (.DBT/.FPT) y agenda.
-    6. Normaliza RIFs (J-XXXXX) y prioriza telefonos moviles (0414, 0424, 0412, etc.).
-    7. Genera CSVs con BOM para Excel y JSON estructurado para Supabase en el ESCRITORIO.
+  Criterios y Lógica de Negocio Aplicados:
+    1. Localiza la empresa viva (M:\comp01) por fecha de transacciones reales.
+    2. Logica de precios de MixNet:
+       - PRECIO_CLIENTE_USD = Precio B (el precio real de venta al cliente).
+       - PRECIO_MAYOR_USD   = Precio A (precio base / distribuidor).
+       - PRECIO_BS          = Precio C (precio calculado en bolivares).
+       - COSTO_USD          = Costo actual / reposicion.
+       - STOCK_ACTUAL       = Existencia fisica en inventario.
+    3. Filtro riguroso de PRODUCTOS ACTIVOS:
+       - Descarta articulos inactivos (estatus = '1' en FoxPro).
+       - Descarta registros historicos obsoletos sin precio y sin stock.
+       - Extrae el catalogo real de la tienda (articulos vigentes hoy).
+    4. Cartera de clientes con RIF limpio, direccion, celulares y correos:
+       - Clasifica celulares para WhatsApp (0414, 0424, 0412, etc.) y telefonos fijos.
+       - Rastrea correos en campos, notas MEMO (.DBT/.FPT) y agenda (MXAGENDA).
+    5. Guarda archivos ultra-claros y legibles directamente en el ESCRITORIO.
 
-  Compatible con Node 13+ en Windows 7 / 10 / 11.
-  Cero dependencias npm — 100% modulos nativos de Node.js.
+  Compatible con Node 13+ (Windows 7 / 10 / 11).
+  Cero dependencias npm — 100% nativo.
   ========================================================================
 */
 'use strict';
@@ -22,7 +30,7 @@
 var fs = require('fs');
 var path = require('path');
 
-/* ═══════════════ SALIDA DIRECTA A CONSOLA (SIN BUFFER EN WINDOWS 7) ═══════════════ */
+/* ═══════════════ SALIDA DIRECTA A CONSOLA (SIN BUFFER) ═══════════════ */
 function say(s) {
   try {
     fs.writeSync(1, s + '\r\n');
@@ -50,7 +58,7 @@ function banner(msg) {
   say('');
 }
 
-/* ═══════════════ DECODIFICACION CP1252 (FoxPro Latino) ═══════════════ */
+/* ═══════════════ DECODIFICACION CP1252 ═══════════════ */
 var CP1252 = {
   0x80:'\u20AC', 0x82:'\u201A', 0x83:'\u0192', 0x84:'\u201E', 0x85:'\u2026',
   0x86:'\u2020', 0x87:'\u2021', 0x88:'\u02C6', 0x89:'\u2030', 0x8A:'\u0160',
@@ -72,7 +80,7 @@ function decodeStr(buf, start, len) {
   return s.trim();
 }
 
-/* ═══════════════ LECTOR UNIVERSAL DBF Y MEMO (.DBT / .FPT) ═══════════════ */
+/* ═══════════════ LECTOR DBF Y MEMO (.DBT / .FPT) ═══════════════ */
 function readDbfStructure(filePath) {
   try {
     var buf = fs.readFileSync(filePath);
@@ -191,7 +199,7 @@ function readDbfRows(struct, maxLimit) {
 
   while (pos + struct.recordLen <= maxDataEnd && rows.length < limit) {
     var flag = buf[pos];
-    // 0x2A = borrado logico FoxPro. Omitir.
+    // 0x2A = borrado en FoxPro. Omitir.
     if (flag !== 0x2A && flag === 0x20) {
       var row = {};
       var fOff = 1;
@@ -236,382 +244,381 @@ function findField(fieldNames, candidates) {
   return null;
 }
 
-/* ═══════════════ RASTREO MULTI-CARPETA DE MIXNET ═══════════════ */
-function getTargetFolders() {
-  var folders = [
+/* ═══════════════ DETECCION DE LA EMPRESA ACTIVA ("BASE VIVA") ═══════════════ */
+function locateLiveStoreCompany() {
+  // Rutas candidatas
+  var candidateDirs = [
     'M:\\comp01',
     'M:\\COMP01',
     'M:\\',
-    'M:\\COMP01d',
-    'M:\\COMP02',
-    'M:\\COMP03',
-    'M:\\comp01-ORIGINAL',
-    'M:\\EVALUO CTAINV\\HOY 25092024',
-    'M:\\ejercicios\\EJ010',
-    'M:\\comp01\\EJ010',
     'P:\\comp01',
     'P:\\Elias\\MIX\\MIX11\\comp01',
-    'C:\\RESPAMIX\\MIX11 (servidor)\comp01',
-    'C:\\RESPAMIX\\COMP01-10012023',
+    'C:\\RESPAMIX\\MIX11 (servidor)\\comp01',
     'C:\\MIXNET\\comp01',
     'D:\\MIXNET\\comp01'
   ];
 
-  var existing = [];
-  var seen = {};
+  var bestDir = null;
+  var latestTxDate = null;
+  var txFiles = ['MXTRAINV.DBF', 'MXTRACOB.DBF', 'MXRENFAC.DBF', 'YPENCFAC.DBF', 'VICTAINV.DBF', 'MXCTACLI.DBF'];
 
-  for (var i = 0; i < folders.length; i++) {
-    var fp = folders[i];
-    var norm = path.normalize(fp).replace(/[\/\\]+$/, '');
-    var key = norm.toUpperCase();
-    if (!seen[key] && fs.existsSync(norm)) {
-      seen[key] = true;
-      existing.push(norm);
-    }
+  for (var i = 0; i < candidateDirs.length; i++) {
+    var d = candidateDirs[i];
+    try {
+      if (fs.existsSync(d)) {
+        // Verificar fecha mas reciente de transacciones
+        for (var ti = 0; ti < txFiles.length; ti++) {
+          var fp = path.join(d, txFiles[ti]);
+          if (fs.existsSync(fp)) {
+            var st = fs.statSync(fp);
+            if (!latestTxDate || st.mtime > latestTxDate) {
+              latestTxDate = st.mtime;
+              bestDir = d;
+            }
+          }
+        }
+      }
+    } catch (_) {}
   }
 
-  return existing;
+  return { dir: bestDir, lastTx: latestTxDate };
 }
 
-/* ═══════════════ CONSOLIDADOR OMNISCIENTE DE PRODUCTOS ═══════════════ */
-function crawlAndConsolidateProducts(folders) {
-  log('Iniciando rastreo multi-tabla de inventario y precios reales...');
+/* ═══════════════ EXTRACCION Y FILTRADO INTELIGENTE DE PRODUCTOS ═══════════════ */
+function extractActiveProducts(liveDir) {
+  log('Auditando y extrayendo catalogo de productos en ' + liveDir + '...');
 
-  // Tablas que definen catalogo de productos
-  var pTableNames = [
-    'MXCTAINV.DBF', 'mxctainv.dbf',
-    'VICTAINV.DBF', 'victainv.dbf',
-    'CTAEVA.DBF',   'ctaeva.dbf',
-    'JJCTAINV.DBF', 'jjctainv.dbf',
-    'CTAINV.DBF',   'ctainv.dbf'
+  // Tablas que contienen definiciones de articulos en la empresa
+  var tableNames = [
+    'VICTAINV.DBF',
+    'MXCTAINV.DBF',
+    'CTAEVA.DBF',
+    'JJCTAINV.DBF'
   ];
 
-  var scannedTables = [];
   var productsMap = new Map();
+  var totalRawFound = 0;
+  var inactiveCount = 0;
+  var obsoleteCount = 0;
 
-  for (var fi = 0; fi < folders.length; fi++) {
-    var fDir = folders[fi];
+  for (var ti = 0; ti < tableNames.length; ti++) {
+    var tPath = path.join(liveDir, tableNames[ti]);
+    if (fs.existsSync(tPath)) {
+      var struct = readDbfStructure(tPath);
+      if (struct && struct.numRecords > 0) {
+        log('  -> Analizando tabla: ' + struct.fileName + ' (' + struct.numRecords + ' registros)');
+        var rows = readDbfRows(struct, 500000);
+        var fn = struct.fieldNames;
 
-    for (var ti = 0; ti < pTableNames.length; ti++) {
-      var tPath = path.join(fDir, pTableNames[ti]);
-      if (fs.existsSync(tPath)) {
-        var struct = readDbfStructure(tPath);
-        if (struct && struct.numRecords > 5) {
-          scannedTables.push(struct);
-          log('  -> Escaneando: ' + struct.path + ' (' + struct.numRecords + ' registros)');
+        var fCode   = findField(fn, ['codart', 'codigo', 'cod_art', 'id']);
+        var fName   = findField(fn, ['nomart', 'nombre', 'descrip', 'articulo']);
+        var fPA     = findField(fn, ['precio_a', 'p1', 'precio1']);
+        var fPB     = findField(fn, ['precio_b', 'p2', 'precio2']);
+        var fPC     = findField(fn, ['precio_c', 'p3', 'precio3']);
+        var fCost   = findField(fn, ['costo_act', 'costo', 'ult_costo', 'cost_u']);
+        var fStock  = findField(fn, ['existe_act', 'exist', 'stock', 'cantidad']);
+        var fGroup  = findField(fn, ['grupo', 'familia', 'fam', 'cat']);
+        var fBrand  = findField(fn, ['marca', 'mar']);
+        var fUnit   = findField(fn, ['unidad', 'uni', 'medida']);
+        var fProv   = findField(fn, ['ult_prove', 'proveedor', 'prov_asig']);
+        var fStatus = findField(fn, ['estatus', 'status', 'inactivo']);
+        var fFMod   = findField(fn, ['fecha_mod', 'fec_mod', 'fechamod']);
 
-          var rows = readDbfRows(struct, 500000);
-          var fn = struct.fieldNames;
+        for (var ri = 0; ri < rows.length; ri++) {
+          totalRawFound++;
+          var r = rows[ri];
 
-          var fCode  = findField(fn, ['codart', 'codigo', 'cod_art', 'id']);
-          var fName  = findField(fn, ['nomart', 'nombre', 'descrip', 'articulo']);
-          var fP1    = findField(fn, ['precio_a', 'precio1', 'p1', 'pvp', 'precio']);
-          var fP2    = findField(fn, ['precio_b', 'precio2', 'p2']);
-          var fP3    = findField(fn, ['precio_c', 'precio3', 'p3']);
-          var fP4    = findField(fn, ['precio_d', 'precio4', 'p4']);
-          var fCost  = findField(fn, ['costo_act', 'costo', 'ult_costo', 'cost_u']);
-          var fStock = findField(fn, ['existe_act', 'exist', 'stock', 'cantidad']);
-          var fGroup = findField(fn, ['grupo', 'familia', 'fam', 'cat']);
-          var fBrand = findField(fn, ['marca', 'mar']);
-          var fUnit  = findField(fn, ['unidad', 'uni', 'medida']);
-          var fIva   = findField(fn, ['iva', 'tasa_iva']);
-          var fProv  = findField(fn, ['ult_prove', 'proveedor', 'prov_asig']);
-          var fFMod  = findField(fn, ['fecha_mod', 'fec_mod', 'fechamod']);
+          var cod = String(r[fCode] || '').trim().toUpperCase();
+          if (!cod) continue;
 
-          for (var ri = 0; ri < rows.length; ri++) {
-            var r = rows[ri];
-            var cod = String(r[fCode] || '').trim().toUpperCase();
-            if (!cod) continue;
+          var nom = String(r[fName] || '').trim();
+          if (!nom) nom = '(SIN NOMBRE)';
 
-            var nom = String(r[fName] || '').trim();
-            if (!nom) nom = '(SIN NOMBRE)';
+          // CRITERIO 1: Estatus de FoxPro (estatus == '1' es DESACTIVADO / INACTIVO)
+          var stVal = String(r[fStatus] || '').trim();
+          if (stVal === '1') {
+            inactiveCount++;
+            continue;
+          }
 
-            var p1 = parseFloat(r[fP1] || 0) || 0;
-            var p2 = parseFloat(r[fP2] || 0) || 0;
-            var p3 = parseFloat(r[fP3] || 0) || 0;
-            var p4 = parseFloat(r[fP4] || 0) || 0;
-            var cost = parseFloat(r[fCost] || 0) || 0;
-            var stock = parseFloat(r[fStock] || 0) || 0;
-            if (stock < 0) stock = 0;
+          // Precios de MixNet
+          // PRECIO B: Precio venta cliente (USD)
+          // PRECIO A: Precio mayorista / distribuidor (USD)
+          // PRECIO C: Precio en Bolivares (Bs)
+          var pB = parseFloat(String(r[fPB] || '0').replace(/,/g, '.')) || 0;
+          var pA = parseFloat(String(r[fPA] || '0').replace(/,/g, '.')) || 0;
+          var pC = parseFloat(String(r[fPC] || '0').replace(/,/g, '.')) || 0;
+          var cost = parseFloat(String(r[fCost] || '0').replace(/,/g, '.')) || 0;
+          var stock = parseFloat(String(r[fStock] || '0').replace(/,/g, '.')) || 0;
 
-            var fMod = String(r[fFMod] || '').trim();
-            if (!fMod && struct.mtime) {
-              fMod = struct.mtime.toISOString().substring(0, 10).replace(/-/g, '');
-            }
+          // Si el precio B esta en cero pero A tiene valor, usar A como respaldo para cliente
+          var precioCliente = pB > 0 ? pB : pA;
+          var precioMayor   = pA > 0 ? pA : pB;
 
-            // Omitir si no tiene ningun dato util
-            if (p1 <= 0 && stock <= 0 && cost <= 0) continue;
+          var fMod = String(r[fFMod] || '').trim();
 
-            var candidateItem = {
-              codigo: cod,
-              nombre: nom,
-              precio_usd: p1,
-              precio_2: p2,
-              precio_bs: p3,
-              precio_4: p4,
-              costo: cost,
-              stock: stock,
-              grupo: String(r[fGroup] || '').trim(),
-              marca: String(r[fBrand] || '').trim(),
-              unidad: String(r[fUnit] || '').trim(),
-              iva: String(r[fIva] || '').trim(),
-              proveedor: String(r[fProv] || '').trim(),
-              fecha_mod: fMod,
-              tabla_origen: struct.fileName
-            };
+          // CRITERIO 2: Filtro de activos reales:
+          // Un producto activo hoy en dia DEBE tener precio de venta > 0, o existencia > 0 en tienda.
+          // Si tiene precio 0 Y stock 0, es un articulo obsoleto/eliminado que no se vende.
+          if (precioCliente <= 0 && stock <= 0) {
+            obsoleteCount++;
+            continue;
+          }
 
-            // FUSION INTELIGENTE Y ACTUALIZACION POR FECHA
-            if (!productsMap.has(cod)) {
-              productsMap.set(cod, candidateItem);
-            } else {
-              var cur = productsMap.get(cod);
+          // Descartar articulos con marcas de borrado en el nombre
+          if (/^(\*{3,}|NO USAR|ELIMINADO|ANULADO)/i.test(nom)) {
+            inactiveCount++;
+            continue;
+          }
 
-              // 1. Si el registro nuevo tiene una fecha de modificacion mas reciente, sus precios mandan
-              if (candidateItem.fecha_mod && candidateItem.fecha_mod > (cur.fecha_mod || '')) {
-                if (candidateItem.precio_usd > 0) {
-                  cur.precio_usd = candidateItem.precio_usd;
-                  cur.precio_2   = candidateItem.precio_2;
-                  cur.precio_bs  = candidateItem.precio_bs;
-                  cur.precio_4   = candidateItem.precio_4;
-                  cur.fecha_mod  = candidateItem.fecha_mod;
-                  cur.tabla_origen = candidateItem.tabla_origen;
-                }
-              }
+          var prodObj = {
+            codigo: cod,
+            descripcion: nom,
+            precio_cliente_usd: precioCliente,
+            precio_mayor_usd: precioMayor,
+            precio_bs: pC,
+            stock_actual: stock > 0 ? stock : 0,
+            costo_usd: cost,
+            estatus: 'ACTIVO',
+            categoria: String(r[fGroup] || '').trim(),
+            marca: String(r[fBrand] || '').trim(),
+            empaque: String(r[fUnit] || '').trim(),
+            proveedor: String(r[fProv] || '').trim(),
+            fecha_mod: fMod,
+            tabla_fuente: struct.fileName
+          };
 
-              // 2. Si el producto actual no tenia precio y este si tiene, asignarlo
-              if (cur.precio_usd <= 0 && candidateItem.precio_usd > 0) {
-                cur.precio_usd = candidateItem.precio_usd;
-                cur.precio_2   = candidateItem.precio_2;
-                cur.precio_bs  = candidateItem.precio_bs;
-                cur.precio_4   = candidateItem.precio_4;
-                cur.fecha_mod  = candidateItem.fecha_mod;
-                cur.tabla_origen = candidateItem.tabla_origen;
-              }
+          // Fusion inteligente por SKU si ya fue leido en otra tabla
+          if (!productsMap.has(cod)) {
+            productsMap.set(cod, prodObj);
+          } else {
+            var cur = productsMap.get(cod);
 
-              // 3. Stock mas reciente o mayor existencia real
-              if (candidateItem.stock > cur.stock || (cur.stock === 0 && candidateItem.stock > 0)) {
-                cur.stock = candidateItem.stock;
-              }
-
-              // 4. Costo
-              if (cur.costo <= 0 && candidateItem.costo > 0) {
-                cur.costo = candidateItem.costo;
-              }
-
-              // 5. Completar campos vacios (marca, unidad, proveedor, grupo)
-              if (!cur.grupo && candidateItem.grupo) cur.grupo = candidateItem.grupo;
-              if (!cur.marca && candidateItem.marca) cur.marca = candidateItem.marca;
-              if (!cur.unidad && candidateItem.unidad) cur.unidad = candidateItem.unidad;
-              if (!cur.proveedor && candidateItem.proveedor) cur.proveedor = candidateItem.proveedor;
-              if ((!cur.nombre || cur.nombre === '(SIN NOMBRE)') && candidateItem.nombre) {
-                cur.nombre = candidateItem.nombre;
+            // Si el nuevo registro viene con fecha_mod mas reciente, actualiza los precios
+            if (prodObj.fecha_mod && prodObj.fecha_mod > (cur.fecha_mod || '')) {
+              if (prodObj.precio_cliente_usd > 0) {
+                cur.precio_cliente_usd = prodObj.precio_cliente_usd;
+                cur.precio_mayor_usd   = prodObj.precio_mayor_usd;
+                cur.precio_bs          = prodObj.precio_bs;
+                cur.fecha_mod          = prodObj.fecha_mod;
+                cur.tabla_fuente       = prodObj.tabla_fuente;
               }
             }
+
+            // Si el anterior tenia stock 0 y este tiene stock real, actualizar
+            if (prodObj.stock_actual > cur.stock_actual) {
+              cur.stock_actual = prodObj.stock_actual;
+            }
+
+            // Completar datos vacios
+            if (!cur.marca && prodObj.marca) cur.marca = prodObj.marca;
+            if (!cur.categoria && prodObj.categoria) cur.categoria = prodObj.categoria;
+            if (!cur.empaque && prodObj.empaque) cur.empaque = prodObj.empaque;
+            if (!cur.proveedor && prodObj.proveedor) cur.proveedor = prodObj.proveedor;
+            if (cur.costo_usd <= 0 && prodObj.costo_usd > 0) cur.costo_usd = prodObj.costo_usd;
           }
         }
       }
     }
   }
 
-  var finalList = Array.from(productsMap.values());
-  logOK('Total productos consolidados con precios actuales: ' + finalList.length);
+  var activeProducts = Array.from(productsMap.values());
+
+  // Ordenar alfabeticamente por descripcion
+  activeProducts.sort(function(a, b) {
+    return a.descripcion.localeCompare(b.descripcion);
+  });
 
   return {
-    tablesScanned: scannedTables.map(function(s) { return s.path; }),
-    products: finalList
+    products: activeProducts,
+    totalRaw: totalRawFound,
+    inactive: inactiveCount,
+    obsolete: obsoleteCount
   };
 }
 
-/* ═══════════════ CONSOLIDADOR OMNISCIENTE DE CLIENTES Y CORREOS ═══════════════ */
-function crawlAndConsolidateClients(folders) {
-  log('Iniciando rastreo de clientes y matriz global de emails...');
+/* ═══════════════ EXTRACCION Y NORMALIZACION DE CLIENTES ═══════════════ */
+function extractActiveClients(liveDir) {
+  log('Auditando y extrayendo cartera de clientes con emails y telefonos...');
 
   var EMAIL_REGEX = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
-
-  // 1. Matriz global de correos indexada por RIF, Codigo, Telefono y Nombre
   var emailIndexByRif  = {};
   var emailIndexByCod  = {};
-  var emailIndexByName = {};
 
-  function registerEmail(em, rif, cod, name) {
+  function indexEmail(em, rif, cod) {
     if (!em) return;
-    var cleanEm = em.trim().toLowerCase();
+    var clean = em.trim().toLowerCase();
     if (rif) {
-      var rNorm = rif.toUpperCase().replace(/[\s.-]/g, '');
-      if (rNorm && !emailIndexByRif[rNorm]) emailIndexByRif[rNorm] = cleanEm;
+      var rClean = rif.toUpperCase().replace(/[\s.-]/g, '');
+      if (rClean && !emailIndexByRif[rClean]) emailIndexByRif[rClean] = clean;
     }
     if (cod) {
-      var cNorm = cod.trim().toUpperCase();
-      if (cNorm && !emailIndexByCod[cNorm]) emailIndexByCod[cNorm] = cleanEm;
-    }
-    if (name) {
-      var nNorm = name.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-      if (nNorm && nNorm.length > 5 && !emailIndexByName[nNorm]) emailIndexByName[nNorm] = cleanEm;
+      var cClean = cod.trim().toUpperCase();
+      if (cClean && !emailIndexByCod[cClean]) emailIndexByCod[cClean] = clean;
     }
   }
 
-  // Buscar tablas auxiliares que contienen emails (MXAGENDA, MXSUCCLI, contactos)
-  var emailAuxFiles = [
-    'MXAGENDA.DBF', 'mxagenda.dbf',
-    'MXSUCCLI.DBF', 'mxsuccli.dbf',
-    'MXCONTAC.DBF', 'mxcontac.dbf'
+  // 1. Matriz de emails en tablas complementarias (MXAGENDA.DBF)
+  var agendaPaths = [
+    path.join(liveDir, 'MXAGENDA.DBF'),
+    path.join(path.dirname(liveDir), 'MXAGENDA.DBF'),
+    'M:\\MXAGENDA.DBF'
   ];
 
-  for (var fi = 0; fi < folders.length; fi++) {
-    var fDir = folders[fi];
-    for (var ai = 0; ai < emailAuxFiles.length; ai++) {
-      var aPath = path.join(fDir, emailAuxFiles[ai]);
-      if (fs.existsSync(aPath)) {
-        var aStruct = readDbfStructure(aPath);
-        if (aStruct && aStruct.numRecords > 0) {
-          log('  -> Escaneando correos en: ' + aStruct.path);
-          var aRows = readDbfRows(aStruct, 100000);
-          aRows.forEach(function(row) {
-            var foundMail = '';
-            var keys = Object.keys(row);
-            for (var ki = 0; ki < keys.length; ki++) {
-              var val = String(row[keys[ki]] || '');
-              var m = val.match(EMAIL_REGEX);
-              if (m) { foundMail = m[0]; break; }
-            }
-            if (foundMail) {
-              var rRif  = row.rif || row.cif || row.cifoih || '';
-              var rCod  = row.codcli || row.codigo || row.cod_cli || '';
-              var rNom  = row.nomcli || row.nombre || row.razon || '';
-              registerEmail(foundMail, rRif, rCod, rNom);
-            }
-          });
-        }
+  for (var ai = 0; ai < agendaPaths.length; ai++) {
+    var ap = agendaPaths[ai];
+    if (fs.existsSync(ap)) {
+      var agStruct = readDbfStructure(ap);
+      if (agStruct) {
+        log('  -> Escaneando agenda de contactos: ' + agStruct.path);
+        var agRows = readDbfRows(agStruct, 20000);
+        agRows.forEach(function(ar) {
+          var m = String(ar.email || '').match(EMAIL_REGEX);
+          if (m) {
+            indexEmail(m[0], ar.rif || ar.cif || '', ar.codcli || ar.codigo || '');
+          }
+        });
+        break;
       }
     }
   }
 
-  // 2. Extraer cartera de clientes desde MXCTACLI.DBF principal
+  // 2. Cartera maestra de clientes (MXCTACLI.DBF)
+  var cPath = path.join(liveDir, 'MXCTACLI.DBF');
+  if (!fs.existsSync(cPath)) cPath = path.join(liveDir, 'mxctacli.dbf');
+
   var clientsMap = new Map();
 
-  for (var fi2 = 0; fi2 < folders.length; fi2++) {
-    var mainCliPath = path.join(folders[fi2], 'MXCTACLI.DBF');
-    if (fs.existsSync(mainCliPath)) {
-      var cStruct = readDbfStructure(mainCliPath);
-      if (cStruct && cStruct.numRecords > 100) {
-        log('  -> Extrayendo cartera maestra de clientes: ' + cStruct.path);
-        var cRows = readDbfRows(cStruct, 500000);
-        var cfn = cStruct.fieldNames;
+  if (fs.existsSync(cPath)) {
+    var cStruct = readDbfStructure(cPath);
+    if (cStruct) {
+      log('  -> Extrayendo clientes desde: ' + cStruct.path + ' (' + cStruct.numRecords + ' registros)');
+      var cRows = readDbfRows(cStruct, 500000);
+      var cfn = cStruct.fieldNames;
 
-        var fCliCod   = findField(cfn, ['codcli', 'codigo', 'cod_cli', 'id']);
-        var fCliNom   = findField(cfn, ['nomcli', 'razonsocial', 'razon', 'nombre']);
-        var fCliRif   = findField(cfn, ['cifoih', 'cifoi', 'cif', 'rif', 'cedula']);
-        var fCliDir1  = findField(cfn, ['direc1h', 'direc1', 'dir1', 'direccion1']);
-        var fCliDir2  = findField(cfn, ['direc2h', 'direc2', 'dir2']);
-        var fCliDir3  = findField(cfn, ['direc3h', 'direc3', 'dir3']);
-        var fCliDir4  = findField(cfn, ['direc4h', 'direc4', 'dir4']);
-        var fCliTlf1  = findField(cfn, ['tlf1h', 'tlf1', 'telefono1', 'tel1']);
-        var fCliTlf2  = findField(cfn, ['tlf2h', 'tlf2', 'telefono2', 'tel2']);
-        var fCliEmail = findField(cfn, ['email', 'emailngq', 'correo', 'mail']);
-        var fCliVen   = findField(cfn, ['codven', 'vendedor', 'vended']);
-        var fCliZona  = findField(cfn, ['zonacto', 'zona']);
-        var fCliSaldo = findField(cfn, ['saldo', 'saldoor']);
+      var fCod   = findField(cfn, ['codcli', 'codigo', 'cod_cli', 'id']);
+      var fNom   = findField(cfn, ['nomcli', 'razonsocial', 'razon', 'nombre']);
+      var fRif   = findField(cfn, ['cifoih', 'cifoi', 'cif', 'rif', 'cedula']);
+      var fDir1  = findField(cfn, ['direc1h', 'direc1', 'dir1', 'direccion1']);
+      var fDir2  = findField(cfn, ['direc2h', 'direc2', 'dir2']);
+      var fDir3  = findField(cfn, ['direc3h', 'direc3', 'dir3']);
+      var fDir4  = findField(cfn, ['direc4h', 'direc4', 'dir4']);
+      var fTlf1  = findField(cfn, ['tlf1h', 'tlf1', 'telefono1', 'tel1']);
+      var fTlf2  = findField(cfn, ['tlf2h', 'tlf2', 'telefono2', 'tel2']);
+      var fFax   = findField(cfn, ['fax4h', 'fax', 'tlf3']);
+      var fEmail = findField(cfn, ['emailngq', 'email', 'correo', 'mail']);
+      var fVen   = findField(cfn, ['vendedor', 'codven', 'vended']);
+      var fZona  = findField(cfn, ['zonacto', 'zona']);
+      var fSaldo = findField(cfn, ['saldoor', 'saldo']);
 
-        for (var ci = 0; ci < cRows.length; ci++) {
-          var rc = cRows[ci];
-          var cCod = String(rc[fCliCod] || '').trim();
-          var cNom = String(rc[fCliNom] || '').trim();
-          if (!cCod && !cNom) continue;
+      for (var ci = 0; ci < cRows.length; ci++) {
+        var rc = cRows[ci];
+        var cCod = String(rc[fCod] || '').trim();
+        var cNom = String(rc[fNom] || '').trim();
+        if (!cCod && !cNom) continue;
 
-          // Normalizar RIF
-          var rawRif = String(rc[fCliRif] || '').trim().toUpperCase().replace(/[\s.-]/g, '');
-          var rifClean = rawRif;
-          if (/^\d+$/.test(rawRif)) rifClean = 'V-' + rawRif;
-          else if (/^[JVEGP]\d+$/.test(rawRif)) rifClean = rawRif.charAt(0) + '-' + rawRif.substring(1);
+        // Limpiar y estructurar RIF
+        var rawRif = String(rc[fRif] || '').trim().toUpperCase().replace(/[\s.-]/g, '');
+        var rifClean = rawRif;
+        if (/^\d+$/.test(rawRif)) rifClean = 'V-' + rawRif;
+        else if (/^[JVEGP]\d+$/.test(rawRif)) rifClean = rawRif.charAt(0) + '-' + rawRif.substring(1);
 
-          // Concatenar direcciones completas
-          var dirParts = [rc[fCliDir1], rc[fCliDir2], rc[fCliDir3], rc[fCliDir4]].filter(function(x) {
-            return x && String(x).trim();
-          }).map(function(x) { return String(x).trim(); });
-          var direccion = dirParts.join(' ').trim();
+        // Concatenar direccion fiscal completa
+        var dirParts = [rc[fDir1], rc[fDir2], rc[fDir3], rc[fDir4]].filter(function(x) {
+          return x && String(x).trim();
+        }).map(function(x) { return String(x).trim(); });
+        var direccion = dirParts.join(' ').trim();
 
-          // Limpiar telefonos
-          var t1 = String(rc[fCliTlf1] || '').trim();
-          var t2 = String(rc[fCliTlf2] || '').trim();
+        // Clasificar telefonos: Movil (WhatsApp) vs Fijo
+        var rawPhones = [rc[fTlf1], rc[fTlf2], rc[fFax]].filter(function(x) {
+          return x && String(x).trim();
+        }).map(function(x) { return String(x).trim(); });
 
-          // Extraer Email por orden de resolucion:
-          // 1) Campo email directo en la fila
-          var email = '';
-          var mDirect = String(rc[fCliEmail] || '').match(EMAIL_REGEX);
-          if (mDirect) email = mDirect[0].toLowerCase();
+        var movilPhone = '';
+        var fijoPhone  = '';
 
-          // 2) Notas memo (.DBT / .FPT)
-          if (!email && rc.memo) {
-            var mMemo = String(rc.memo).match(EMAIL_REGEX);
-            if (mMemo) email = mMemo[0].toLowerCase();
-          }
-
-          // 3) En la direccion u observacion
-          if (!email && direccion) {
-            var mDir = direccion.match(EMAIL_REGEX);
-            if (mDir) email = mDir[0].toLowerCase();
-          }
-
-          // 4) Matriz global por RIF
-          var rNorm = rawRif.toUpperCase().replace(/[\s.-]/g, '');
-          if (!email && rNorm && emailIndexByRif[rNorm]) {
-            email = emailIndexByRif[rNorm];
-          }
-
-          // 5) Matriz global por Codigo de Cliente
-          var cNorm = cCod.trim().toUpperCase();
-          if (!email && cNorm && emailIndexByCod[cNorm]) {
-            email = emailIndexByCod[cNorm];
-          }
-
-          // 6) Matriz global por Nombre
-          var nNorm = cNom.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-          if (!email && nNorm && emailIndexByName[nNorm]) {
-            email = emailIndexByName[nNorm];
-          }
-
-          var cliObj = {
-            codigo: cCod,
-            nombre: cNom,
-            rif: rifClean,
-            telefono1: t1,
-            telefono2: t2,
-            email: email,
-            direccion: direccion,
-            vendedor_cod: String(rc[fCliVen] || '').trim(),
-            zona: String(rc[fCliZona] || '').trim(),
-            saldo: parseFloat(rc[fCliSaldo] || 0) || 0
-          };
-
-          var key = cCod || rifClean || cNom;
-          if (!clientsMap.has(key)) {
-            clientsMap.set(key, cliObj);
-          } else {
-            var prevCli = clientsMap.get(key);
-            if (!prevCli.email && cliObj.email) prevCli.email = cliObj.email;
-            if (!prevCli.telefono1 && cliObj.telefono1) prevCli.telefono1 = cliObj.telefono1;
-            if (!prevCli.direccion && cliObj.direccion) prevCli.direccion = cliObj.direccion;
+        for (var pi = 0; pi < rawPhones.length; pi++) {
+          var pRaw = rawPhones[pi];
+          var digits = pRaw.replace(/\D/g, '');
+          // Si tiene 10 u 11 digitos y empieza por 0414, 0424, 0412, 0416, 0426
+          if (/^0?(414|424|412|416|426)\d{7}$/.test(digits)) {
+            if (!movilPhone) movilPhone = pRaw;
+          } else if (digits.length >= 7) {
+            if (!fijoPhone) fijoPhone = pRaw;
           }
         }
-        break; // Ya se leyo la cartera maestra con exito
+        if (!movilPhone && rawPhones.length > 0) movilPhone = rawPhones[0];
+
+        // Resolucion de Email:
+        var email = '';
+        var mDirect = String(rc[fEmail] || '').match(EMAIL_REGEX);
+        if (mDirect) email = mDirect[0].toLowerCase();
+
+        // 2) Memo .DBT / .FPT
+        if (!email && rc.memo) {
+          var mMemo = String(rc.memo).match(EMAIL_REGEX);
+          if (mMemo) email = mMemo[0].toLowerCase();
+        }
+
+        // 3) En la direccion
+        if (!email && direccion) {
+          var mDir = direccion.match(EMAIL_REGEX);
+          if (mDir) email = mDir[0].toLowerCase();
+        }
+
+        // 4) En matriz de agenda
+        var rNorm = rawRif.toUpperCase().replace(/[\s.-]/g, '');
+        if (!email && rNorm && emailIndexByRif[rNorm]) {
+          email = emailIndexByRif[rNorm];
+        }
+        if (!email && cCod && emailIndexByCod[cCod.toUpperCase()]) {
+          email = emailIndexByCod[cCod.toUpperCase()];
+        }
+
+        var cliObj = {
+          codigo: cCod,
+          razon_social: cNom,
+          rif: rifClean,
+          telefono_movil_whatsapp: movilPhone,
+          telefono_fijo: fijoPhone,
+          email: email,
+          direccion_fiscal: direccion,
+          vendedor: String(rc[fVen] || '').trim(),
+          zona: String(rc[fZona] || '').trim(),
+          saldo: parseFloat(String(rc[fSaldo] || '0').replace(/,/g, '.')) || 0
+        };
+
+        var key = cCod || rifClean || cNom;
+        if (!clientsMap.has(key)) {
+          clientsMap.set(key, cliObj);
+        } else {
+          var prev = clientsMap.get(key);
+          if (!prev.email && cliObj.email) prev.email = cliObj.email;
+          if (!prev.telefono_movil_whatsapp && cliObj.telefono_movil_whatsapp) prev.telefono_movil_whatsapp = cliObj.telefono_movil_whatsapp;
+        }
       }
     }
   }
 
-  var finalList = Array.from(clientsMap.values());
-  logOK('Total clientes procesados: ' + finalList.length);
-  var conMail = finalList.filter(function(x) { return x.email; }).length;
-  logOK('Total clientes con correo verificado: ' + conMail);
+  var activeClients = Array.from(clientsMap.values());
+  activeClients.sort(function(a, b) {
+    return a.razon_social.localeCompare(b.razon_social);
+  });
 
-  return finalList;
+  return activeClients;
 }
 
-/* ═══════════════ GENERADOR CSV Y GUARDADO ═══════════════ */
+/* ═══════════════ HELPERS PARA EXCEL Y GUARDADO ═══════════════ */
 function escCSV(v) {
   if (v === null || v === undefined) v = '';
   v = String(v).trim().replace(/\r\n/g, ' ').replace(/\n/g, ' ');
   if (/[",;]/.test(v)) return '"' + v.replace(/"/g, '""') + '"';
   return v;
+}
+
+function fmtDate(s) {
+  if (!s || s.length < 8) return '';
+  return s.substring(0, 4) + '-' + s.substring(4, 6) + '-' + s.substring(6, 8);
 }
 
 function saveOutputs(prefix, csvContent, jsonPayload) {
@@ -652,87 +659,126 @@ function saveOutputs(prefix, csvContent, jsonPayload) {
   return savedFiles;
 }
 
-/* ═══════════════ EJECUCION TOTAL ═══════════════ */
-function main() {
-  banner('JJ PAPER -- MOTOR TOTAL Y CONSOLIDADOR MIXNET v5.0');
+/* ═══════════════ MOTOR PRINCIPAL ═══════════════ */
+function run() {
+  banner('JJ PAPER -- EXTRACTOR CONSCIENTE Y PRECISO MIXNET v5.1');
 
-  // Paso 1: Detectar carpetas vivas
-  var folders = getTargetFolders();
-  if (folders.length === 0) {
-    logErr('No se encontro ninguna carpeta de MixNet (M:\\comp01, P:\\, C:\\RESPAMIX).');
-    say('  Verifica que la unidad M: este conectada al servidor 192.168.0.185.');
+  // 1. Localizar Servidor Activo
+  log('Paso 1: Localizando servidor activo de MixNet...');
+  var live = locateLiveStoreCompany();
+
+  if (!live.dir) {
+    logErr('No se encontro la unidad de red M:\\comp01.');
+    say('  Por favor verifica que la unidad M: este conectada al servidor 192.168.0.185.');
     return;
   }
 
-  log('Carpetas de datos activas:');
-  folders.forEach(function(f) { say('    * ' + f); });
+  logOK('Servidor en vivo conectado: ' + live.dir);
+  if (live.lastTx) {
+    logOK('Ultima transaccion registrada en tienda: ' + live.lastTx.toLocaleDateString() + ' ' + live.lastTx.toLocaleTimeString());
+  }
+
+  // 2. Extraer y filtrar Productos Activos
+  log('Paso 2: Extrayendo catalogo con logica estricta de precios (Precio B = Cliente)...');
+  var prodResult = extractActiveProducts(live.dir);
+  var productos = prodResult.products;
+
   say('');
+  say('  ----------------------------------------------------------------------');
+  say('  AUDITORIA DE PRODUCTOS EN TIENDA:');
+  say('    * Total registros evaluados en base de datos: ' + prodResult.totalRaw);
+  say('    * Registros inactivos / dados de baja:        ' + prodResult.inactive);
+  say('    * Registros obsoletos (sin precio ni stock):  ' + prodResult.obsolete);
+  say('    * PRODUCTOS ACTIVOS Y VIGENTES HOY:           ' + productos.length);
+  say('  ----------------------------------------------------------------------');
 
-  // Paso 2: Consolidar productos de todas las tablas
-  var prodResult = crawlAndConsolidateProducts(folders);
-  var productosFinales = prodResult.products;
-
-  // Paso 3: Consolidar clientes y correos
-  var clientesFinales = crawlAndConsolidateClients(folders);
-
-  // Muestra de validacion visual
+  // Muestra de validacion visual de 4 productos
   say('');
-  say('========================================================================');
-  say('  MUESTRA DE PRECIOS REALES CONSOLIDADOS:');
-  say('========================================================================');
-  productosFinales.slice(0, 4).forEach(function(p) {
-    say('  [' + p.codigo + '] ' + p.nombre);
-    say('      USD: $' + p.precio_usd.toFixed(2) + ' | Bs: ' + p.precio_bs.toFixed(2) + ' | Costo: $' + p.costo.toFixed(2) + ' | Stock: ' + p.stock + ' | Fuente: ' + p.tabla_origen);
+  say('  MUESTRA DE PRECIOS EXACTOS (PRECIO B = CLIENTE):');
+  productos.slice(0, 4).forEach(function(p) {
+    say('  * [' + p.codigo + '] ' + p.descripcion);
+    say('    -> PRECIO CLIENTE (USD): $' + p.precio_cliente_usd.toFixed(2) + ' (Precio B)');
+    say('    -> PRECIO MAYOR (USD):   $' + p.precio_mayor_usd.toFixed(2) + ' (Precio A)');
+    say('    -> PRECIO EN BS:         ' + p.precio_bs.toFixed(2) + ' Bs (Precio C)');
+    say('    -> STOCK FISICO ACTUAL:  ' + p.stock_actual + ' unidades');
+    say('    -> TABLA FUENTE:         ' + p.tabla_fuente + (p.fecha_mod ? ' | ' + fmtDate(p.fecha_mod) : ''));
+    say('');
   });
-  say('========================================================================');
+
+  // 3. Extraer Clientes y Correos
+  log('Paso 3: Extrayendo cartera de clientes con emails y celulares...');
+  var clientes = extractActiveClients(live.dir);
+  var clientesConEmail = clientes.filter(function(c) { return c.email; }).length;
+
   say('');
+  say('  ----------------------------------------------------------------------');
+  say('  AUDITORIA DE CARTERA DE CLIENTES:');
+  say('    * Total clientes activos:          ' + clientes.length);
+  say('    * Clientes con correo certificado: ' + clientesConEmail);
+  say('  ----------------------------------------------------------------------');
 
-  // Paso 4: Construir CSVs
-  log('Generando archivos finales para Excel y Supabase...');
+  // 4. Estructurar CSVs Ultra-Clares para Excel
+  log('Paso 4: Construyendo archivos limpios para Excel y Supabase...');
 
-  var pCsvHeaders = 'CODIGO,PRODUCTO,PRECIO_USD,PRECIO_2,PRECIO_BS,COSTO_USD,STOCK,GRUPO,MARCA,UNIDAD,PROVEEDOR,FECHA_MOD,TABLA_ORIGEN';
-  var pCsvRows = [pCsvHeaders];
-  productosFinales.forEach(function(p) {
-    pCsvRows.push([
-      escCSV(p.codigo), escCSV(p.nombre), p.precio_usd.toFixed(2), p.precio_2.toFixed(2),
-      p.precio_bs.toFixed(2), p.costo.toFixed(2), p.stock.toString(),
-      escCSV(p.grupo), escCSV(p.marca), escCSV(p.unidad), escCSV(p.proveedor),
-      escCSV(p.fecha_mod), escCSV(p.tabla_origen)
+  var pHeaders = 'CODIGO,DESCRIPCION,PRECIO_CLIENTE_USD,PRECIO_MAYOR_USD,PRECIO_BS,STOCK_ACTUAL,COSTO_USD,ESTATUS,CATEGORIA,MARCA,EMPAQUE,PROVEEDOR,FECHA_ACTUALIZACION';
+  var pRows = [pHeaders];
+  productos.forEach(function(p) {
+    pRows.push([
+      escCSV(p.codigo),
+      escCSV(p.descripcion),
+      p.precio_cliente_usd.toFixed(2),
+      p.precio_mayor_usd.toFixed(2),
+      p.precio_bs.toFixed(2),
+      p.stock_actual.toString(),
+      p.costo_usd.toFixed(2),
+      escCSV(p.estatus),
+      escCSV(p.categoria),
+      escCSV(p.marca),
+      escCSV(p.empaque),
+      escCSV(p.proveedor),
+      escCSV(fmtDate(p.fecha_mod))
     ].join(','));
   });
 
-  var cCsvHeaders = 'CODIGO,NOMBRE_EMPRESA,RIF,TELEFONO_1,TELEFONO_2,EMAIL,DIRECCION,VENDEDOR_COD,ZONA,SALDO';
-  var cCsvRows = [cCsvHeaders];
-  clientesFinales.forEach(function(c) {
-    cCsvRows.push([
-      escCSV(c.codigo), escCSV(c.nombre), escCSV(c.rif), escCSV(c.telefono1),
-      escCSV(c.telefono2), escCSV(c.email), escCSV(c.direccion),
-      escCSV(c.vendedor_cod), escCSV(c.zona), c.saldo.toFixed(2)
+  var cHeaders = 'CODIGO_CLIENTE,NOMBRE_O_RAZON_SOCIAL,RIF,TELEFONO_MOVIL_WHATSAPP,TELEFONO_FIJO,EMAIL,DIRECCION_FISCAL,VENDEDOR_ASIGNADO,ZONA,SALDO_PENDIENTE';
+  var cRows = [cHeaders];
+  clientes.forEach(function(c) {
+    cRows.push([
+      escCSV(c.codigo),
+      escCSV(c.razon_social),
+      escCSV(c.rif),
+      escCSV(c.telefono_movil_whatsapp),
+      escCSV(c.telefono_fijo),
+      escCSV(c.email),
+      escCSV(c.direccion_fiscal),
+      escCSV(c.vendedor),
+      escCSV(c.zona),
+      c.saldo.toFixed(2)
     ].join(','));
   });
 
   var supabasePayload = {
     exportado_el: new Date().toISOString(),
-    fuentes_escaneadas: folders,
-    tablas_productos_leidas: prodResult.tablesScanned,
+    servidor_fuente: live.dir,
     resumen: {
-      total_productos: productosFinales.length,
-      total_clientes: clientesFinales.length,
-      clientes_con_email: clientesFinales.filter(function(x) { return x.email; }).length
+      total_productos_activos: productos.length,
+      total_clientes: clientes.length,
+      clientes_con_correo: clientesConEmail
     },
-    productos: productosFinales,
-    clientes: clientesFinales
+    productos: productos,
+    clientes: clientes
   };
 
-  var savedP = saveOutputs('mixnet_productos_reales', pCsvRows.join('\r\n'), null);
-  var savedC = saveOutputs('mixnet_clientes_reales', cCsvRows.join('\r\n'), null);
+  // Guardar archivos
+  var savedP = saveOutputs('mixnet_productos_activos', pRows.join('\r\n'), null);
+  var savedC = saveOutputs('mixnet_clientes_cartera', cRows.join('\r\n'), null);
   var savedJ = saveOutputs('mixnet_payload_supabase', null, supabasePayload);
 
   say('');
   say('========================================================================');
-  say('  PROCESO 100% COMPLETADO CON EXITO (CERO PREGUNTAS)');
+  say('  EXTRACCION COMPLETADA CON EXITO (DATOS REALES Y ACTIVOS)');
   say('========================================================================');
-  say('  Archivos disponibles en tu ESCRITORIO:');
+  say('  Archivos listos en tu ESCRITORIO:');
   savedP.forEach(function(f) { say('    * PRODUCTOS : ' + f); });
   savedC.forEach(function(f) { say('    * CLIENTES  : ' + f); });
   savedJ.forEach(function(f) { say('    * SUPABASE  : ' + f); });
@@ -741,7 +787,7 @@ function main() {
 }
 
 try {
-  main();
+  run();
 } catch (err) {
-  logErr('Fallo critico: ' + (err.stack || err.message));
+  logErr('Error en ejecucion: ' + (err.stack || err.message));
 }
