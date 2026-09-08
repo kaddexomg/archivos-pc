@@ -246,16 +246,23 @@ function findField(fieldNames, candidates) {
 
 /* ═══════════════ DETECCION DE LA EMPRESA ACTIVA ("BASE VIVA") ═══════════════ */
 function locateLiveStoreCompany() {
-  // Rutas candidatas
+  // Rutas candidatas de busqueda directa
   var candidateDirs = [
     'M:\\comp01',
     'M:\\COMP01',
     'M:\\',
+    'C:\\comp01',
+    'C:\\COMP01',
+    'C:\\MIXNET\\comp01',
+    'C:\\Archivos de programa\\MIXNET\\comp01',
+    'C:\\Archivos de programa (x86)\\MIXNET\\comp01',
+    'C:\\Program Files\\MIXNET\\comp01',
+    'C:\\Program Files (x86)\\MIXNET\\comp01',
     'P:\\comp01',
     'P:\\Elias\\MIX\\MIX11\\comp01',
     'C:\\RESPAMIX\\MIX11 (servidor)\\comp01',
-    'C:\\MIXNET\\comp01',
-    'D:\\MIXNET\\comp01'
+    'D:\\MIXNET\\comp01',
+    'D:\\comp01'
   ];
 
   var bestDir = null;

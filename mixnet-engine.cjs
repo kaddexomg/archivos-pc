@@ -1,11 +1,13 @@
 /*
   ========================================================================
-  JJ PAPER -- MOTOR DE DATOS TRANSACCIONALES E HISTORICOS MIXNET v6.1
+  JJ PAPER -- MOTOR DE DATOS MIXNET & LOCALIZADOR UNIVERSAL v6.2
   ========================================================================
-  - Deteccion DINAMICA del horizonte temporal (sin fechas fijas cableadas).
-  - Calculo de velocidad de rotacion y dias sin movimiento.
-  - Explorador y Lector de Archivos (.PRG, .INI, .TXT, .DBF) para los Agentes.
-  100% compatible con Node 13 (Windows 7) - Cero dependencias npm externas.
+  - Deteccion AUTOMATICA y DINAMICA de unidades (C:, D:, M:, P:, etc.).
+  - Localizador Profundo de Instalaciones MixNet, Codigo Fuente (.PRG) y Datos.
+  - Buscador recursivo de archivos con wildcards (*.prg, *.ini, *.dbf, etc.).
+  - Cambio en caliente de carpeta activa de base de datos (switchDatabaseDirectory).
+  - Horizonte dinamico de rotacion y vigencia (sin fechas fijas cableadas).
+  - 100% compatible con Node 13 / Windows 7 - Cero dependencias npm externas.
 */
 'use strict';
 
@@ -142,16 +144,186 @@ function findField(fieldNames, candidates) {
   return null;
 }
 
-/* ═══════════════ LOCALIZACION DE EMPRESA VIVA ═══════════════ */
+/* ═══════════════ DETECCION DE UNIDADES DEL SISTEMA ═══════════════ */
+function getAvailableDrives() {
+  var candidates = ['C', 'D', 'E', 'F', 'G', 'H', 'M', 'N', 'P', 'Z', 'Y', 'X', 'W', 'V', 'U', 'T', 'S', 'R', 'Q', 'O', 'L', 'K', 'J', 'I', 'B', 'A'];
+  var found = [];
+  for (var i = 0; i < candidates.length; i++) {
+    var letter = candidates[i];
+    var driveRoot = letter + ':\\';
+    try {
+      if (fs.existsSync(driveRoot)) {
+        found.push(driveRoot);
+      }
+    } catch (_) {}
+  }
+  return found;
+}
+
+/* ═══════════════ LOCALIZADOR PROFUNDO DE MIXNET & CODIGO FUENTE ═══════════════ */
+function findMixnetLocations() {
+  var drives = getAvailableDrives();
+  var locations = [];
+  var visitedDirs = {};
+
+  var probeFolders = [
+    'comp01', 'COMP01', 'comp02',
+    'MIXNET', 'mixnet', 'Mixnet',
+    'MIX11', 'mix11', 'MIX',
+    'RESPAMIX', 'respamix',
+    'SISTEMAS', 'sistemas',
+    'Archivos de programa\\MIXNET',
+    'Archivos de programa\\Mixnet',
+    'Archivos de programa (x86)\\MIXNET',
+    'Archivos de programa (x86)\\Mixnet',
+    'Program Files\\MIXNET',
+    'Program Files\\Mixnet',
+    'Program Files (x86)\\MIXNET',
+    'Program Files (x86)\\Mixnet',
+    'INSTALADORES', 'instaladores', 'Instaladores',
+    'SETUP', 'setup', 'Instalacion', 'INSTALACION',
+    'DLL-Pre', 'DLL-Pre\\DLL\\PRG', 'DLL\\PRG', 'PRG', 'prg',
+    'ejercicios'
+  ];
+
+  function inspectCandidate(dirPath) {
+    var norm = path.normalize(dirPath).toLowerCase();
+    if (visitedDirs[norm]) return;
+    visitedDirs[norm] = true;
+
+    try {
+      if (!fs.existsSync(dirPath)) return;
+      var stat = fs.statSync(dirPath);
+      if (!stat.isDirectory()) return;
+
+      var files = fs.readdirSync(dirPath);
+      var dbfCount = 0;
+      var prgCount = 0;
+      var iniCount = 0;
+      var exeCount = 0;
+      var hasInventoryTable = false;
+      var hasClientTable = false;
+      var hasSalesTable = false;
+      var hasMixExe = false;
+      var sampleFiles = [];
+
+      for (var fi = 0; fi < files.length; fi++) {
+        var f = files[fi];
+        var fUp = f.toUpperCase();
+        var fExt = path.extname(fUp);
+
+        if (fExt === '.DBF') {
+          dbfCount++;
+          if (fUp === 'VICTAINV.DBF' || fUp === 'MXCTAINV.DBF' || fUp === 'CTAINV.DBF') hasInventoryTable = true;
+          if (fUp === 'MXCTACLI.DBF' || fUp === 'CTACLI.DBF') hasClientTable = true;
+          if (fUp === 'ALB.DBF' || fUp === 'MXRENFAC.DBF' || fUp === 'MXTRAINV.DBF' || fUp === 'YPENCFAC.DBF') hasSalesTable = true;
+        } else if (fExt === '.PRG' || fExt === '.SPR' || fExt === '.MPR') {
+          prgCount++;
+        } else if (fExt === '.INI' || fExt === '.CFG') {
+          iniCount++;
+        } else if (fExt === '.EXE') {
+          exeCount++;
+          if (/mix/i.test(fUp)) hasMixExe = true;
+        }
+
+        if (sampleFiles.length < 8 && (fExt === '.PRG' || fExt === '.INI' || fExt === '.DBF' || fExt === '.EXE')) {
+          sampleFiles.push(f);
+        }
+      }
+
+      var role = null;
+      if (hasInventoryTable || hasClientTable) {
+        role = 'BASE_DATOS_VIVA';
+      } else if (prgCount > 0) {
+        role = 'CODIGO_FUENTE';
+      } else if (hasMixExe) {
+        role = 'PROGRAMA_EJECUTABLE';
+      } else if (iniCount > 0 && dbfCount > 0) {
+        role = 'CONFIG_Y_DATOS';
+      } else if (dbfCount > 5) {
+        role = 'TABLAS_AUXILIARES';
+      }
+
+      if (role) {
+        locations.push({
+          path: dirPath,
+          role: role,
+          hasInventory: hasInventoryTable,
+          hasClients: hasClientTable,
+          hasSales: hasSalesTable,
+          dbfCount: dbfCount,
+          prgCount: prgCount,
+          iniCount: iniCount,
+          exeCount: exeCount,
+          sampleFiles: sampleFiles,
+          mtime: stat.mtime
+        });
+      }
+    } catch (_) {}
+  }
+
+  // 1. Probar carpetas conocidas en cada unidad
+  for (var di = 0; di < drives.length; di++) {
+    var drv = drives[di];
+    inspectCandidate(drv);
+
+    for (var pi = 0; pi < probeFolders.length; pi++) {
+      var candidate = path.join(drv, probeFolders[pi]);
+      inspectCandidate(candidate);
+    }
+  }
+
+  // 2. Busqueda superficial (nivel 1 y 2) en unidades detectadas
+  for (var di2 = 0; di2 < drives.length; di2++) {
+    var drv2 = drives[di2];
+    try {
+      var rootEntries = fs.readdirSync(drv2);
+      for (var rei = 0; rei < rootEntries.length; rei++) {
+        var entry = rootEntries[rei];
+        if (/^(mix|comp|resp|sist|vfp|fox|inst|set)/i.test(entry)) {
+          var entryPath = path.join(drv2, entry);
+          inspectCandidate(entryPath);
+          try {
+            var subList = fs.readdirSync(entryPath);
+            for (var sli = 0; sli < subList.length; sli++) {
+              var subName = subList[sli];
+              if (/^(comp|prg|dll|ejerc|datos|data)/i.test(subName)) {
+                inspectCandidate(path.join(entryPath, subName));
+              }
+            }
+          } catch (_) {}
+        }
+      }
+    } catch (_) {}
+  }
+
+  // Ordenar: primero bases de datos vivas, luego código fuente
+  locations.sort(function(a, b) {
+    if (a.role === 'BASE_DATOS_VIVA' && b.role !== 'BASE_DATOS_VIVA') return -1;
+    if (b.role === 'BASE_DATOS_VIVA' && a.role !== 'BASE_DATOS_VIVA') return 1;
+    if (a.role === 'CODIGO_FUENTE' && b.role !== 'CODIGO_FUENTE') return -1;
+    if (b.role === 'CODIGO_FUENTE' && a.role !== 'CODIGO_FUENTE') return 1;
+    return b.mtime - a.mtime;
+  });
+
+  return locations;
+}
+
+/* ═══════════════ SELECCION DE EMPRESA VIVA ═══════════════ */
 function locateLiveStoreCompany() {
   var candidateDirs = [
     'M:\\comp01',
     'M:\\COMP01',
     'M:\\',
+    'C:\\comp01',
+    'C:\\COMP01',
+    'C:\\MIXNET\\comp01',
+    'C:\\Archivos de programa\\MIXNET\\comp01',
+    'C:\\Program Files\\MIXNET\\comp01',
+    'C:\\Program Files (x86)\\MIXNET\\comp01',
     'P:\\comp01',
     'P:\\Elias\\MIX\\MIX11\\comp01',
     'C:\\RESPAMIX\\MIX11 (servidor)\\comp01',
-    'C:\\MIXNET\\comp01',
     'D:\\MIXNET\\comp01'
   ];
 
@@ -175,6 +347,17 @@ function locateLiveStoreCompany() {
         }
       }
     } catch (_) {}
+  }
+
+  if (!bestDir) {
+    var detected = findMixnetLocations();
+    for (var k = 0; k < detected.length; k++) {
+      if (detected[k].role === 'BASE_DATOS_VIVA' || detected[k].hasInventory) {
+        bestDir = detected[k].path;
+        latestTxDate = detected[k].mtime;
+        break;
+      }
+    }
   }
 
   return { dir: bestDir, lastTx: latestTxDate };
@@ -208,11 +391,15 @@ var databaseState = {
   clientsByCode: {},
   clientsByRif: {},
   recentSales: [],
+  detectedLocations: [],
+  availableDrives: [],
   summary: {}
 };
 
 // Escaneo y carga DINAMICA de productos
 function loadProducts(liveDir) {
+  if (!liveDir) return { list: [], byCode: {}, maxDate: '' };
+
   var targetTable = null;
   var candidateTables = ['VICTAINV.DBF', 'MXCTAINV.DBF', 'CTAINV.DBF'];
   for (var ci = 0; ci < candidateTables.length; ci++) {
@@ -244,7 +431,6 @@ function loadProducts(liveDir) {
   var fFMod   = findField(fn, ['fecha_mod', 'fec_mod', 'fechamod']);
   var fFCrea  = findField(fn, ['fecha_crea', 'fec_crea', 'fechacrea']);
 
-  // PASO 1: Descubrir DINAMICAMENTE la fecha mas reciente del sistema (maxSystemDate)
   var highestDate = '';
   for (var i = 0; i < rows.length; i++) {
     var r = rows[i];
@@ -267,7 +453,6 @@ function loadProducts(liveDir) {
   var list = [];
   var byCode = {};
 
-  // PASO 2: Filtrado y calculo de rotacion relativo a maxSystemDate
   for (var ri = 0; ri < rows.length; ri++) {
     var row = rows[ri];
     var cod = String(row[fCode] || '').trim().toUpperCase();
@@ -276,7 +461,6 @@ function loadProducts(liveDir) {
     var nom = String(row[fName] || '').trim();
     if (!nom) nom = '(SIN NOMBRE)';
 
-    // Filtros de estatus y marcas de borrado
     var stVal = String(row[fStatus] || '').trim();
     if (stVal === '1') continue;
     if (/^(\*{2,}|NO USAR|ELIMINADO|ANULADO|DESCONTINUADO|OBSOLETO|PRUEBA)/i.test(nom)) continue;
@@ -289,6 +473,7 @@ function loadProducts(liveDir) {
 
     var precioCliente = pB > 0 ? pB : pA;
     var precioMayor   = pA > 0 ? pA : pB;
+
     if (precioCliente <= 0) continue;
 
     var dSal  = String(row[fFSal] || '').trim().replace(/[^0-9]/g, '');
@@ -307,34 +492,23 @@ function loadProducts(liveDir) {
     if (daysSince < 0) daysSince = 0;
 
     var hasStock = stock > 0;
-    // Criterio DINAMICO:
-    // Si tiene stock > 0: Esta en tienda hoy 100%.
-    // Si stock = 0: Solo pasa si tuvo actividad comercial en la ventana dinamica de los ultimos 365 dias
-    // relativos a la fecha de maxima operacion de la empresa (evita filtrar anualmente con anos fijos).
-    var isRecentDynamic = (daysSince <= 365);
+    var isRecentActive = daysSince <= 365;
 
-    if (!hasStock && !isRecentDynamic) continue;
+    if (!hasStock && !isRecentActive) continue;
 
-    // Clasificacion de Rotacion
-    var estadoRotacion = 'ROTACION_MEDIA';
-    if (hasStock) {
-      if (daysSince <= 60) estadoRotacion = 'ALTA_ROTACION';
-      else if (daysSince <= 180) estadoRotacion = 'ROTACION_MEDIA';
-      else if (daysSince <= 365) estadoRotacion = 'BAJA_ROTACION_FRIO';
-      else estadoRotacion = 'STOCK_INMOVILIZADO';
-    } else {
+    var estadoRotacion = 'STOCK_INMOVILIZADO';
+    if (!hasStock) {
       estadoRotacion = 'AGOTADO_VIGENTE';
+    } else if (daysSince <= 60) {
+      estadoRotacion = 'ALTA_ROTACION';
+    } else if (daysSince <= 180) {
+      estadoRotacion = 'ROTACION_MEDIA';
+    } else if (daysSince <= 365) {
+      estadoRotacion = 'BAJA_ROTACION_FRIO';
     }
 
-    // Flag si fue creado o modificado recientemente (ultimos 60 dias del sistema)
-    var modDateObj = parseFoxDate(dMod || dCrea);
-    var isRecentUpdate = modDateObj ? Math.round((maxDateObj - modDateObj) / (1000 * 60 * 60 * 24)) <= 60 : false;
-
-    // Margen Bruto estimado %
-    var marginPct = 0;
-    if (precioCliente > 0 && cost > 0) {
-      marginPct = Math.round(((precioCliente - cost) / precioCliente) * 100);
-    }
+    var isRecentUpdate = (dMod && daysSince <= 45) || (dCrea && daysSince <= 45);
+    var marginPct = (precioCliente > 0 && cost > 0) ? Math.round(((precioCliente - cost) / precioCliente) * 100) : 0;
 
     var prod = {
       codigo: cod,
@@ -369,7 +543,10 @@ function loadProducts(liveDir) {
 
 // Escaneo y carga de clientes
 function loadClients(liveDir) {
+  if (!liveDir) return { list: [], byCode: {}, byRif: {} };
+
   var tPath = path.join(liveDir, 'MXCTACLI.DBF');
+  if (!fs.existsSync(tPath)) tPath = path.join(liveDir, 'CTACLI.DBF');
   if (!fs.existsSync(tPath)) return { list: [], byCode: {}, byRif: {} };
 
   var struct = readDbfStructure(tPath);
@@ -454,11 +631,12 @@ function loadClients(liveDir) {
 
 // Escaneo de facturacion y despachos recientes
 function loadRecentSales(liveDir) {
+  if (!liveDir) return [];
   var sales = [];
   var parentDir = path.dirname(liveDir);
 
   var ejDirs = [];
-  var searchDirs = [liveDir, parentDir, 'M:\\ejercicios', 'M:\\comp01'];
+  var searchDirs = [liveDir, parentDir, path.join(parentDir, 'ejercicios'), 'M:\\ejercicios', 'C:\\ejercicios'];
   for (var si = 0; si < searchDirs.length; si++) {
     var sDir = searchDirs[si];
     try {
@@ -475,23 +653,25 @@ function loadRecentSales(liveDir) {
   }
 
   ejDirs.sort().reverse();
+  if (ejDirs.indexOf(liveDir) === -1) ejDirs.unshift(liveDir);
 
   for (var di = 0; di < ejDirs.length; di++) {
     var ejDir = ejDirs[di];
     var albPath = path.join(ejDir, 'ALB.DBF');
     if (!fs.existsSync(albPath)) albPath = path.join(ejDir, 'ALB01.DBF');
+    if (!fs.existsSync(albPath)) albPath = path.join(ejDir, 'MXRENFAC.DBF');
 
     if (fs.existsSync(albPath)) {
       var struct = readDbfStructure(albPath);
       if (struct && struct.numRecords > 0) {
         var rows = readDbfRows(struct, 5000);
         var fn = struct.fieldNames;
-        var fDoc   = findField(fn, ['numalb', 'numfac', 'documento']);
-        var fFec   = findField(fn, ['emision', 'fecha']);
-        var fCli   = findField(fn, ['cliente', 'codcli']);
-        var fNom   = findField(fn, ['nomcli', 'nombre']);
+        var fDoc   = findField(fn, ['numalb', 'numfac', 'documento', 'num_doc']);
+        var fFec   = findField(fn, ['emision', 'fecha', 'fec_doc', 'fec_emi']);
+        var fCli   = findField(fn, ['cliente', 'codcli', 'cod_cli']);
+        var fNom   = findField(fn, ['nomcli', 'nombre', 'nom_cli']);
         var fRif   = findField(fn, ['cif', 'rif']);
-        var fTot   = findField(fn, ['tot_alb', 'total', 'monto']);
+        var fTot   = findField(fn, ['tot_alb', 'total', 'monto', 'tot_fac']);
         var fVen   = findField(fn, ['codven', 'vendedor']);
 
         for (var ri = rows.length - 1; ri >= 0 && sales.length < 500; ri--) {
@@ -499,13 +679,13 @@ function loadRecentSales(liveDir) {
           var doc = String(r[fDoc] || '').trim();
           var fec = String(r[fFec] || '').trim();
           var tot = parseFloat(String(r[fTot] || '0').replace(/,/g, '.')) || 0;
-          if (tot > 0) {
+          if (tot > 0 || doc) {
             sales.push({
-              documento: doc,
+              documento: doc || ('VENTA-' + (rows.length - ri)),
               fecha: fec,
               fecha_fmt: fmtDate(fec),
               codigo_cliente: String(r[fCli] || '').trim(),
-              cliente: String(r[fNom] || '').trim(),
+              cliente: String(r[fNom] || '').trim() || 'Cliente Mostrador',
               rif: String(r[fRif] || '').trim(),
               total_usd: tot,
               vendedor: String(r[fVen] || '').trim(),
@@ -520,44 +700,135 @@ function loadRecentSales(liveDir) {
   return sales;
 }
 
-/* ═══════════════ EXPLORADOR Y ACCIONES EN EL SISTEMA DE ARCHIVOS ═══════════════ */
+/* ═══════════════ EXPLORADOR INTERACTIVO CON NAVEGACION REAL ═══════════════ */
 function scanDirectory(basePath, filterExtensions, maxDepth) {
-  var depth = typeof maxDepth === 'number' ? maxDepth : 2;
+  var targetPath = basePath ? path.normalize(basePath) : 'C:\\';
   var targetExts = filterExtensions && filterExtensions.length > 0
     ? filterExtensions.map(function(e) { return e.toLowerCase(); })
     : null;
 
+  var drives = getAvailableDrives();
+  var parentDir = path.dirname(targetPath);
+  if (parentDir === targetPath) parentDir = null;
+
+  var folders = [];
+  var files = [];
+  var stats = { totalFolders: 0, totalFiles: 0, hasDbfs: 0, hasPrgs: 0, hasInis: 0 };
+
+  try {
+    if (!fs.existsSync(targetPath)) {
+      return {
+        success: false,
+        error: 'El directorio no existe: ' + targetPath,
+        currentPath: targetPath,
+        parentPath: parentDir,
+        drives: drives,
+        folders: [],
+        files: [],
+        stats: stats
+      };
+    }
+
+    var entries = fs.readdirSync(targetPath);
+    for (var i = 0; i < entries.length; i++) {
+      var entryName = entries[i];
+      if (/^\./.test(entryName) || entryName === '$RECYCLE.BIN' || entryName === 'System Volume Information') continue;
+
+      var fullPath = path.join(targetPath, entryName);
+      try {
+        var st = fs.statSync(fullPath);
+        if (st.isDirectory()) {
+          stats.totalFolders++;
+          folders.push({
+            name: entryName,
+            path: fullPath,
+            mtime: st.mtime
+          });
+        } else if (st.isFile()) {
+          var ext = path.extname(entryName).toLowerCase().replace(/^\./, '');
+          if (ext === 'dbf') stats.hasDbfs++;
+          if (ext === 'prg' || ext === 'spr' || ext === 'mpr') stats.hasPrgs++;
+          if (ext === 'ini' || ext === 'cfg') stats.hasInis++;
+
+          if (!targetExts || targetExts.indexOf(ext) !== -1) {
+            stats.totalFiles++;
+            files.push({
+              name: entryName,
+              path: fullPath,
+              ext: ext,
+              sizeBytes: st.size,
+              mtime: st.mtime
+            });
+          }
+        }
+      } catch (_) {}
+    }
+  } catch (err) {
+    return {
+      success: false,
+      error: 'Error de acceso al directorio: ' + err.message,
+      currentPath: targetPath,
+      parentPath: parentDir,
+      drives: drives,
+      folders: [],
+      files: [],
+      stats: stats
+    };
+  }
+
+  folders.sort(function(a, b) { return a.name.localeCompare(b.name); });
+  files.sort(function(a, b) { return a.name.localeCompare(b.name); });
+
+  return {
+    success: true,
+    currentPath: targetPath,
+    parentPath: parentDir,
+    drives: drives,
+    folders: folders,
+    files: files,
+    stats: stats
+  };
+}
+
+/* ═══════════════ BUSCADOR RECURSIVO DE ARCHIVOS (PERSUADIR Y CONSEGUIR) ═══════════════ */
+function searchFiles(basePath, queryPattern, maxDepth, maxResults) {
+  var startDir = basePath ? path.normalize(basePath) : 'C:\\';
+  var depthLimit = typeof maxDepth === 'number' ? maxDepth : 4;
+  var limit = typeof maxResults === 'number' ? maxResults : 250;
+  var q = (queryPattern || '').trim().toLowerCase();
+
+  var regex = null;
+  if (q) {
+    var escaped = q.replace(/[-[\]{}()+.,\\^$|#\s]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.');
+    regex = new RegExp(escaped, 'i');
+  }
+
   var results = [];
 
-  function walk(currentDir, currentDepth) {
-    if (currentDepth > depth) return;
+  function traverse(dir, currentDepth) {
+    if (results.length >= limit || currentDepth > depthLimit) return;
     try {
-      var entries = fs.readdirSync(currentDir);
-      for (var i = 0; i < entries.length; i++) {
-        var entryName = entries[i];
-        var fullPath = path.join(currentDir, entryName);
+      var list = fs.readdirSync(dir);
+      for (var i = 0; i < list.length; i++) {
+        if (results.length >= limit) break;
+        var name = list[i];
+        if (/^\./.test(name) || name === '$RECYCLE.BIN' || name === 'node_modules' || name === 'System Volume Information') continue;
+
+        var fullPath = path.join(dir, name);
         try {
-          var stat = fs.statSync(fullPath);
-          if (stat.isDirectory()) {
-            if (!/^\./.test(entryName) && entryName !== 'node_modules') {
+          var st = fs.statSync(fullPath);
+          if (st.isDirectory()) {
+            traverse(fullPath, currentDepth + 1);
+          } else if (st.isFile()) {
+            var match = !regex || regex.test(name);
+            if (match) {
               results.push({
-                type: 'dir',
-                name: entryName,
+                name: name,
                 path: fullPath,
-                mtime: stat.mtime
-              });
-              walk(fullPath, currentDepth + 1);
-            }
-          } else if (stat.isFile()) {
-            var ext = path.extname(entryName).toLowerCase().replace(/^\./, '');
-            if (!targetExts || targetExts.indexOf(ext) !== -1) {
-              results.push({
-                type: 'file',
-                name: entryName,
-                path: fullPath,
-                ext: ext,
-                sizeBytes: stat.size,
-                mtime: stat.mtime
+                dir: dir,
+                ext: path.extname(name).toLowerCase().replace(/^\./, ''),
+                sizeBytes: st.size,
+                mtime: st.mtime
               });
             }
           }
@@ -566,20 +837,26 @@ function scanDirectory(basePath, filterExtensions, maxDepth) {
     } catch (_) {}
   }
 
-  walk(basePath, 1);
-  return results;
+  traverse(startDir, 0);
+
+  return {
+    query: queryPattern,
+    startDir: startDir,
+    totalFound: results.length,
+    results: results
+  };
 }
 
-// Lectura de archivo (sea texto, codigo PRG, INI, o DBF estructurado)
+/* ═══════════════ LECTOR DE CONTENIDO DE ARCHIVO ═══════════════ */
 function readFileContent(targetPath, maxLines) {
-  var limit = maxLines || 300;
+  var limit = typeof maxLines === 'number' ? maxLines : 300;
+
   if (!fs.existsSync(targetPath)) {
     return { success: false, error: 'El archivo no existe: ' + targetPath };
   }
 
   var ext = path.extname(targetPath).toLowerCase();
 
-  // Si es tabla DBF: leer esquema y primeras filas
   if (ext === '.dbf') {
     var struct = readDbfStructure(targetPath);
     if (!struct) return { success: false, error: 'No se pudo leer cabecera DBF' };
@@ -594,7 +871,6 @@ function readFileContent(targetPath, maxLines) {
     };
   }
 
-  // Si es archivo de texto / codigo / ini / bat / prg
   try {
     var rawBuf = fs.readFileSync(targetPath);
     var contentStr = decodeStr(rawBuf, 0, Math.min(rawBuf.length, 500000));
@@ -612,28 +888,27 @@ function readFileContent(targetPath, maxLines) {
   }
 }
 
-// Inicializar base de datos completa
-function initializeDatabase() {
-  var live = locateLiveStoreCompany();
-  if (!live.dir) {
-    return { success: false, error: 'No se encontro la unidad de red M:\\comp01' };
+/* ═══════════════ CAMBIO DE DIRECTORIO ACTIVO EN CALIENTE ═══════════════ */
+function switchDatabaseDirectory(targetDir) {
+  if (!targetDir || !fs.existsSync(targetDir)) {
+    return { success: false, error: 'El directorio especificado no existe: ' + targetDir };
   }
 
-  databaseState.liveDir = live.dir;
+  databaseState.liveDir = targetDir;
   databaseState.lastScan = new Date();
 
-  var pData = loadProducts(live.dir);
+  var pData = loadProducts(targetDir);
   databaseState.products = pData.list;
   databaseState.productsByCode = pData.byCode;
   databaseState.maxSystemDate = pData.maxDate;
   databaseState.maxSystemDateFmt = fmtDate(pData.maxDate);
 
-  var cData = loadClients(live.dir);
+  var cData = loadClients(targetDir);
   databaseState.clients = cData.list;
   databaseState.clientsByCode = cData.byCode;
   databaseState.clientsByRif = cData.byRif;
 
-  databaseState.recentSales = loadRecentSales(live.dir);
+  databaseState.recentSales = loadRecentSales(targetDir);
 
   var enStock = databaseState.products.filter(function(p) { return p.stock_actual > 0; }).length;
   var agotados = databaseState.products.filter(function(p) { return p.stock_actual <= 0; }).length;
@@ -651,18 +926,56 @@ function initializeDatabase() {
     clientes_con_whatsapp: conCelular,
     clientes_con_email: conEmail,
     ventas_recientes_registradas: databaseState.recentSales.length,
-    servidor_fuente: live.dir,
+    servidor_fuente: targetDir,
     ultimo_escaneo: databaseState.lastScan.toISOString()
   };
 
-  databaseState.initialized = true;
-  return { success: true, summary: databaseState.summary };
+  databaseState.initialized = (databaseState.products.length > 0 || databaseState.clients.length > 0);
+  return { success: true, summary: databaseState.summary, initialized: databaseState.initialized };
+}
+
+/* ═══════════════ INICIALIZACION GENERAL DE LA BASE DE DATOS ═══════════════ */
+function initializeDatabase() {
+  databaseState.availableDrives = getAvailableDrives();
+  databaseState.detectedLocations = findMixnetLocations();
+
+  var live = locateLiveStoreCompany();
+
+  if (live.dir) {
+    return switchDatabaseDirectory(live.dir);
+  }
+
+  databaseState.initialized = false;
+  databaseState.liveDir = null;
+  databaseState.summary = {
+    total_productos: 0,
+    productos_en_stock: 0,
+    productos_agotados_vigentes: 0,
+    productos_modificados_recientes: 0,
+    fecha_maxima_sistema: '',
+    total_clientes: 0,
+    clientes_con_whatsapp: 0,
+    clientes_con_email: 0,
+    ventas_recientes_registradas: 0,
+    servidor_fuente: 'NO CONECTADO (Usa el localizador para conectar a MixNet)',
+    ultimo_escaneo: new Date().toISOString()
+  };
+
+  return {
+    success: false,
+    error: 'No se detecto automaticamente la base de datos viva. Usa el localizador para conectar una carpeta.',
+    detectedLocations: databaseState.detectedLocations,
+    availableDrives: databaseState.availableDrives
+  };
 }
 
 module.exports = {
   initializeDatabase: initializeDatabase,
+  switchDatabaseDirectory: switchDatabaseDirectory,
   getState: function() { return databaseState; },
-  locateLiveStoreCompany: locateLiveStoreCompany,
+  getAvailableDrives: getAvailableDrives,
+  findMixnetLocations: findMixnetLocations,
   scanDirectory: scanDirectory,
+  searchFiles: searchFiles,
   readFileContent: readFileContent
 };

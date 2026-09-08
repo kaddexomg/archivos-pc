@@ -784,3 +784,161 @@ body {
   color: #e0e7ff;
 }
 
+/* ─── BANNER DE ALERTA DE CONEXION ─── */
+.connection-alert-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #451a03;
+  border: 1px solid #b45309;
+  padding: 12px 20px;
+  margin: 14px 20px 0 20px;
+  border-radius: 8px;
+  gap: 16px;
+}
+
+.banner-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.banner-icon {
+  font-size: 24px;
+}
+
+.banner-text strong {
+  color: #fde047;
+  font-size: 14px;
+  display: block;
+}
+
+.banner-text p {
+  color: #fef08a;
+  font-size: 12px;
+  margin: 2px 0 0 0;
+}
+
+.banner-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* ─── CONTROLES AVANZADOS DEL EXPLORADOR ─── */
+.explorer-drives-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.explorer-drives-row label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.drives-list {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.btn-drive {
+  background: #1e293b;
+  border: 1px solid #3b82f6;
+  color: #93c5fd;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-drive:hover, .btn-drive.active {
+  background: #2563eb;
+  color: white;
+}
+
+.explorer-nav-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.explorer-nav-row input {
+  flex: 1;
+  background: #0f172a;
+  border: 1px solid var(--border);
+  color: white;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.explorer-search-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.explorer-search-row input {
+  flex: 1;
+  background: #0f172a;
+  border: 1px solid var(--border);
+  color: white;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.btn-success {
+  background: #059669;
+  color: white;
+  border: none;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-success:hover {
+  background: #10b981;
+}
+
+.file-item.folder {
+  border-left: 3px solid #f59e0b;
+}
+
+.file-item.folder:hover {
+  background: rgba(245, 158, 11, 0.15);
+  border-color: #f59e0b;
+}
+
+.location-chip {
+  background: rgba(139, 92, 246, 0.15);
+  border: 1px solid rgba(139, 92, 246, 0.4);
+  color: #c4b5fd;
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.location-chip:hover {
+  background: rgba(139, 92, 246, 0.3);
+  color: white;
+}
+
+.table-loading-row td {
+  padding: 30px;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+
