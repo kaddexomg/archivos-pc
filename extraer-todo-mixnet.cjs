@@ -1,435 +1,747 @@
 /*
-  ============================================================
-  JJ Paper — Extractor TOTAL de MixNet (DBF dBase)
-  ============================================================
-  Captura TODA la informacion util para nutrir JJ Paper:
+  ========================================================================
+  JJ Paper — Inspector y Extractor Inteligente de MixNet v4.0 (2026)
+  ========================================================================
+  Herramienta consciente para extracción de datos reales de MixNet:
+    1. Audita y compara tablas (MXCTAINV vs VICTAINV vs JJCTAINV).
+    2. Certifica "Base Viva" mediante fecha de movimientos/facturas.
+    3. Muestra una vista previa de precios en pantalla para validación humana.
+    4. Extrae inventario real (código, nombre, precios USD/Bs, costo, stock).
+    5. Extrae clientes con RIF limpio, teléfonos, dirección y correos (con soporte MEMO).
+    6. Genera CSVs para Excel y JSON estructurado listo para inyección en Supabase Core.
 
-    [A] INVENTARIO / CATALOGO  -> codigo real, nombre real,
-        descripcion, precio(s), existencia/stock, familia,
-        categoria, proveedor, impuesto.
-
-    [B] CLIENTES               -> codigo, razon social, RIF,
-        direccion, telefonos, contacto, email, vendedor,
-        cobrador, zona, saldo, limite de credito, banco.
-
-    [C] MAESTRAS DE REFERENCIA -> vendedores, cobradores,
-        zonas, familias, proveedores, bancos de clientes.
-
-  Objetivo principal: que los productos del catalogo de JJ Paper
-  puedan coincidir con los productos REALES de MixNet por codigo
-  de inventario, nombre real, precio real y existencia real.
-
-  AUTODETECTA por nombre de CAMPO (no depende de nombres de archivo).
-
-  USO:
-    node extraer-todo-mixnet.cjs                flujo completo
-    node extraer-todo-mixnet.cjs --tiempo 900   mas presupuesto
-    node extraer-todo-mixnet.cjs --explorar     ver que tablas hay
-    node extraer-todo-mixnet.cjs --diagnostico "M:\comp01"
-    node extraer-todo-mixnet.cjs --esquema "RUTA\ARCHIVO.DBF"
-
-  Compatible con Node 13+ (CommonJS). 2026-09-01 v1
-  ============================================================
+  Compatible con Node 13+ (Windows 7 / 10 / 11).
+  Cero dependencias npm — 100% módulos nativos de Node.js.
+  ========================================================================
 */
 'use strict';
 
 var fs = require('fs');
 var path = require('path');
+var readline = require('readline');
 
-/* ─────────── E/S ─────────── */
-function say(s){ try{ fs.writeSync(1, s+'\n'); }catch(_){ console.log(s); } }
-function ts(){ return new Date().toLocaleTimeString(); }
-function log(m){ say('['+ts()+'] '+m); }
-
-/* ─────────── LECTOR DBF ─────────── */
-function readDbfHeader(buf){
-  return { numRecords:buf.readUInt32LE(4), headerLen:buf.readUInt16LE(8),
-           recordLen:buf.readUInt16LE(10),
-           lastUpd:{ y:buf[1]+1900, m:buf[2], d:buf[3] } };
+/* ═══════════════ SALIDA Y CONSOLA ═══════════════ */
+function say(s) {
+  try { fs.writeSync(1, s + '\n'); } catch (_) { console.log(s); }
 }
-function decodeStr(buf,start,len){
-  var s=''; for(var i=start;i<start+len;i++){ var c=buf[i]; if(c===0) break; s+=String.fromCharCode(c); }
+
+function ts() {
+  var d = new Date();
+  var pad = function(n) { return String(n).padStart(2, '0'); };
+  return '[' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds()) + ']';
+}
+
+function log(m)     { say(ts() + ' ' + m); }
+function logOK(m)   { say(ts() + '  ✔ ' + m); }
+function logWarn(m) { say(ts() + '  ⚠ ' + m); }
+function logErr(m)  { say(ts() + '  ✖ ' + m); }
+
+function banner(msg) {
+  say('');
+  say('  ======================================================================');
+  say('    ' + msg);
+  say('  ======================================================================');
+  say('');
+}
+
+/* ═══════════════ DECODIFICACIÓN CP1252 (Español FoxPro) ═══════════════ */
+var CP1252 = {
+  0x80:'\u20AC', 0x82:'\u201A', 0x83:'\u0192', 0x84:'\u201E', 0x85:'\u2026',
+  0x86:'\u2020', 0x87:'\u2021', 0x88:'\u02C6', 0x89:'\u2030', 0x8A:'\u0160',
+  0x8B:'\u2039', 0x8C:'\u0152', 0x8E:'\u017D', 0x91:'\u2018', 0x92:'\u2019',
+  0x93:'\u201C', 0x94:'\u201D', 0x95:'\u2022', 0x96:'\u2013', 0x97:'\u2014',
+  0x98:'\u02DC', 0x99:'\u2122', 0x9A:'\u0161', 0x9B:'\u203A', 0x9C:'\u0153',
+  0x9E:'\u017E', 0x9F:'\u0178', 0xA0:' ',     0xA7:'\u00A7'
+};
+
+function decodeStr(buf, start, len) {
+  var s = '';
+  for (var i = start; i < start + len; i++) {
+    var b = buf[i];
+    if (b === 0) break;
+    if (b < 128) s += String.fromCharCode(b);
+    else if (b >= 0xA0) s += String.fromCharCode(b);
+    else s += CP1252[b] || '';
+  }
   return s.trim();
 }
-function readDbfFields(buf,headerLen){
-  var fields=[],off=32;
-  while(off+32<=headerLen-1 && buf[off]!==0x0D){
-    fields.push({ name:decodeStr(buf,off,11).replace(/\0/g,'').trim().toLowerCase(),
-                  type:String.fromCharCode(buf[off+11]), len:buf.readUInt16LE(off+16), dec:buf[off+17] });
-    off+=32;
-  }
-  return fields;
-}
-function readDbfHeaderFields(filePath){
-  var buf; try{ buf=fs.readFileSync(filePath); }catch(_){ return null; }
-  if(buf.length<33) return null;
-  var hdr; try{ hdr=readDbfHeader(buf); }catch(_){ return null; }
-  if(hdr.headerLen<32||hdr.recordLen<1||hdr.headerLen>buf.length) return null;
-  var fields; try{ fields=readDbfFields(buf,hdr.headerLen); }catch(_){ return null; }
-  return { header:hdr, fields:fields, size:buf.length };
-}
-function readDbfData(filePath){
-  var buf; try{ buf=fs.readFileSync(filePath); }catch(_){ return null; }
-  if(buf.length<33) return null;
-  var hdr; try{ hdr=readDbfHeader(buf); }catch(_){ return null; }
-  if(hdr.headerLen<32||hdr.recordLen<1||hdr.headerLen>buf.length) return null;
-  var fields; try{ fields=readDbfFields(buf,hdr.headerLen); }catch(_){ return null; }
-  var maxEnd=Math.min(hdr.headerLen+hdr.numRecords*hdr.recordLen, buf.length);
-  var rows=[],pos=hdr.headerLen;
-  while(pos+hdr.recordLen<=maxEnd && rows.length<300000){
-    var rec=buf.slice(pos,pos+hdr.recordLen);
-    if(rec[0]!==0x2A && rec[0]===0x20){
-      var obj={},fpos=1;
-      for(var fi=0;fi<fields.length;fi++){ var f=fields[fi]; if(fpos+f.len>rec.length) break;
-        obj[f.name]=decodeStr(rec,fpos,f.len); fpos+=f.len; }
-      rows.push(obj);
-    }
-    pos+=hdr.recordLen;
-  }
-  return { fields:fields, rows:rows, numRecords:hdr.numRecords, filePath:filePath };
-}
 
-/* ─────────── TEXTOS ─────────── */
-function normTxt(s){ if(s==null)return''; s=String(s).toLowerCase().trim();
-  if(s.normalize) s=s.normalize('NFD').replace(/[\u0300-\u036f]/g,'');
-  return s.replace(/[^a-z0-9]/g,' ').replace(/\s+/g,' ').trim(); }
-function normCod(s){ if(s==null)return''; return String(s).toLowerCase().trim()
-  .split('-').map(function(seg){return seg.replace(/^0+/,'');}).join('-')
-  .replace(/[^a-z0-9\-]/g,''); }
-function escCSV(v){ v=(v==null?'':String(v)).trim(); return /[",\n\r]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; }
-function toCSV(rows,head){ var l=[head.join(',')]; for(var i=0;i<rows.length;i++){ var r=rows[i],c=[];
-    for(var j=0;j<head.length;j++) c.push(escCSV(r[head[j]])); l.push(c.join(',')); } return l.join('\r\n'); }
-function findField(keys, cands, def){ for(var ci=0;ci<cands.length;ci++){ var c=cands[ci];
-    for(var ki=0;ki<keys.length;ki++){ var k=keys[ki]; if(k===c||k.indexOf(c)===0||k.indexOf(c)!==-1) return k; } }
-  return def; }
-function hasField(keys, re){ for(var i=0;i<keys.length;i++){ if(re.test(keys[i])) return true; } return false; }
+/* ═══════════════ LECTOR DBF Y ARCHIVOS MEMO (.DBT / .FPT) ═══════════════ */
+function readDbfStructure(filePath) {
+  try {
+    var buf = fs.readFileSync(filePath);
+    if (buf.length < 33) return null;
 
-/* ─────────── RUTAS (escribe en TODAS, garantiza C:) ─────────── */
-function rutasSalida(nombre){
-  var rutas=[], vista=[], userHome=process.env.USERPROFILE||'';
-  try{
-    var regs=[
-      '"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\User Shell Folders" /v Desktop',
-      '"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Shell Folders" /v Desktop'];
-    for(var ri=0;ri<regs.length;ri++){
-      var out=require('child_process').execSync('reg query '+regs[ri],{encoding:'utf8'});
-      var m=out.match(/REG_(?:EXPAND_)?SZ\s+([^\r\n]+)/i);
-      if(m){ var v=m[1].trim(); v=v.replace(/%USERPROFILE%/i,process.env.USERPROFILE||'');
-        vista.push(v); }
-    }
-  }catch(_){}
-  var cand=[];
-  if(userHome) cand.push(userHome+'\\Desktop',userHome+'\\Escritorio',userHome+'\\Documents\\Desktop');
-  cand.push('C:\\Users\\Public\\Desktop','C:\\Users\\Public\\Escritorio');
-  for(var ci=0;ci<cand.length;ci++){ try{ if(fs.existsSync(cand[ci])&&fs.statSync(cand[ci]).isDirectory()) rutas.push(path.join(cand[ci],nombre)); }catch(_){} }
-  for(var vi=0;vi<vista.length;vi++){ try{ if(fs.existsSync(vista[vi])&&fs.statSync(vista[vi]).isDirectory()) rutas.push(path.join(vista[vi],nombre)); }catch(_){} }
-  rutas.push(path.join(__dirname,nombre));
-  var unicas=[],visto={};
-  for(var ui=0;ui<rutas.length;ui++){ var r=path.normalize(rutas[ui]); if(!visto[r]){visto[r]=true;unicas.push(r);} }
-  return unicas;
-}
-function escribirEnTodas(texto,outF){
-  var nombre = outF && path.isAbsolute(outF)? path.basename(outF):outF;
-  var rutas=rutasSalida(nombre), primera=null;
-  for(var i=0;i<rutas.length;i++){ try{ fs.writeFileSync(rutas[i],texto,'utf8'); if(!primera)primera=rutas[i]; }catch(_){} }
-  return primera||path.join(__dirname,nombre);
-}
-function escribirCSVTodas(rows,head,outF){
-  var csv=toCSV(rows,head);
-  var p=escribirEnTodas(csv,outF);
-  return p;
-}
-function stFecha(){ var d=new Date(), p=function(n){return String(n).padStart(2,'0');};
-  return ''+d.getFullYear()+p(d.getMonth()+1)+p(d.getDate())+'_'+p(d.getHours())+p(d.getMinutes())+p(d.getSeconds()); }
+    var numRecords = buf.readUInt32LE(4);
+    var headerLen  = buf.readUInt16LE(8);
+    var recordLen  = buf.readUInt16LE(10);
+    var lastUpd    = { y: buf[1] + 1900, m: buf[2], d: buf[3] };
 
-/* ─────────── UNIDADES ─────────── */
-function detectarUnidades(){
-  var unidades=[],cand=['M:','P:','Z:','C:','D:','E:','F:','G:','H:','I:'];
-  log('Detectando unidades...');
-  for(var i=0;i<cand.length;i++){ var u=cand[i],root=u+'\\';
-    try{ if(fs.existsSync(root)){ var e=fs.readdirSync(root); unidades.push({letra:u,root:root});
-      log('  [OK] '+u+'/  ('+e.length+' elementos)'); }else log('  [--] '+u+'/ no existe');
-    }catch(err){ log('  [!!] '+u+'/ '+err.message); } }
-  return unidades;
-}
+    if (headerLen < 33 || recordLen < 1 || headerLen > buf.length) return null;
 
-/* ─────────── CLASIFICACION DE TABLAS por campos ─────────── */
-var RE_COD   = /(^|_)(cod|code|id|id_art|art|item|nro|numero)$|^cod|^id$|^art_|^articulo_|^nro$/i;
-var RE_DESC  = /^descri|^artic|^nombr|^producto|^detalle|^denomi|^nombre_|^desc_/i;
-var RE_PREC  = /^prec|pvp|p\.?vent|^cost|p\.?mayor|p\.?minor|precio|pventa|pmayor|p1|p2|costo/i;
-var RE_STOCK = /^exis|stock|saldo|cant|dispo|stk|^exist/i;
-var RE_FAM   = /^fam|grupo|categ|rubro|linea|^tipo$|^seccion|^depart/i;
-var RE_PROV  = /^prove|provee|suplidor|^alma|^deposito|^bodega/i;
-var RE_CLIENT= /^nomcli|^razon|^cliente|^nombrecli|^denominacion/i;
-var RE_RIF   = /^rif|^nit|^cedula|^cif|^identif/i;
-var RE_TEL   = /^telf|^tel|^tlf|^mova|^celul|^telefo/i;
-var RE_DIR   = /^direc|^dir$|^dom|^dirc/i;
-var RE_FECHA = /^fecha|^fec|^fch|^date/i;
-var RE_DOCTO = /^nro|^num|^factura|^docto|^doc/;
-var RE_VEND  = /^vendedor|^vend|^vended/;
-var RE_NOM   = /^nom|^razon|^nombre|^descrip/i;
-
-function clasificar(fields){
-  var fn=fields.map(function(f){ return f.name; });
-  var has=function(re){ return hasField(fn,re); };
-  var r=function(re){ return fn.filter(function(n){ return re.test(n); }); };
-  var res={ fn:fn,
-    cod:r(RE_COD), desc:r(RE_DESC), prec:r(RE_PREC), stk:r(RE_STOCK),
-    fam:r(RE_FAM), prov:r(RE_PROV), cli:r(RE_CLIENT), rif:r(RE_RIF),
-    tel:r(RE_TEL), dir:r(RE_DIR), fec:r(RE_FECHA), docto:r(RE_DOCTO),
-    hasFec:has(RE_FECHA), hasCli:has(RE_CLIENT), hasRif:has(RE_RIF),
-    hasTel:has(RE_TEL), hasCod:has(RE_COD), hasDesc:has(RE_DESC),
-    hasPrec:has(RE_PREC), hasStk:has(RE_STOCK) };
-
-  var tipo='OTRA';
-  var scoreCli=(res.cli.length?1:0)+(res.rif.length?1:0)+(res.hasTel?1:0)+(res.hasRif?1:0);
-  var scoreArt=0; if(res.hasCod&&res.hasDesc) scoreArt+=2; if(res.hasPrec) scoreArt+=2; if(res.hasStk) scoreArt+=1;
-
-  if(scoreArt>=3 && res.cli.length===0) tipo=(res.hasFec?'VENTAS_LINEAS':'INVENTARIO');
-  else if(scoreCli>=3) tipo=(res.hasFec||res.hasDocto?'MOVIMIENTO_CLIENTE':'CLIENTES');
-  else if(res.hasCod&&res.hasFec&&res.hasDesc) tipo='MOVIMIENTOS';
-  else if(res.hasCod&&res.hasPrec&&!res.hasDesc) tipo='PRECIOS';
-  else if(res.hasCod&&res.hasStk&&!res.hasDesc) tipo='STOCK';
-  else if(res.hasCod&&res.hasFam&&!res.hasDesc) tipo='FAMILIAS';
-  else if(res.hasCod&&res.hasProv&&!res.hasDesc) tipo='PROVEEDORES';
-  else if(res.fam.length>=2 && res.nombre0) tipo='CUALQUIERA';
-
-  res.tipo=tipo; return res;
-}
-
-/* ─────────── ESCANEO CON PRESUPUESTO ─────────── */
-var EXCLUDE=/windows|program files|programdata|appdata|perflogs|\$recycle|fonts|drivers|\.git|node_modules|\$windows|bluestacks|anaconda|nodejs|python|nvidia|intel\b|\.thumbnails|dcim|music|videos|pictures|musica|common files|microsoft office|microsoft.net|installshield|nero|brother|bullzip|hp\\|adobe|mozilla|google|java\\|intel\\|dvd maker/i;
-var PRIO=/mixnet|mixer|respami|comp\d|multiemp|ventas|venta|factura|sistema|datos|base|clientes|contab|bases|dbf|banco|admin|\bmx\b|invent|stock|articulo|precio|provee|impuest/i;
-
-function crearEscaneador(unidades){
-  var queue=[],visitados={};
-  var stats={carpetas:0,dbf:0,procesados:0,errores:0,ignoradas:0};
-  var meta=[];
-  for(var i=0;i<unidades.length;i++) queue.push({dir:unidades[i].root,prio:0,depth:0});
-  function prioDe(n,d){ var p=100-d*3; if(PRIO.test(n))p+=800; if(/\.bak|backup|old|orig|tmp/i.test(n))p-=400; return p; }
-  return {
-    stats:stats, meta:meta,
-    hayPendientes:function(){ return queue.length>0; },
-    pendientes:function(){ return queue.length; },
-    recorrer:function(limite){
-      var leidos=[],proc=0;
-      queue.sort(function(a,b){return b.prio-a.prio;});
-      while(queue.length&&proc<limite){
-        var item=queue.pop(),dir=item.dir,depth=item.depth; proc++;
-        if(visitados[dir])continue; visitados[dir]=true; if(depth>45)continue;
-        stats.carpetas++;
-        var entries; try{entries=fs.readdirSync(dir,{withFileTypes:true});}catch(_){stats.errores++;continue;}
-        for(var i=0;i<entries.length;i++){
-          var e=entries[i],fp=path.join(dir,e.name);
-          if(e.isDirectory()){ if(EXCLUDE.test(e.name)){stats.ignoradas++;continue;}
-            queue.push({dir:fp,prio:prioDe(e.name,depth+1),depth:depth+1}); }
-          else if(e.isFile()&&/\.dbf$/i.test(e.name)){
-            stats.dbf++; var st; try{st=fs.statSync(fp);}catch(_){continue;} if(st.size<33)continue;
-            var l=readDbfHeaderFields(fp); if(!l)continue; stats.procesados++;
-            var cls=clasificar(l.fields);
-            cls.path=fp; cls.nombre=path.basename(fp); cls.regs=l.header.numRecords; cls.size=st.size; cls.fecha=l.header.lastUpd;
-            meta.push(cls);
-          }
-        }
-        if(stats.carpetas%400===0) log('    ...'+stats.carpetas+' carpetas, '+stats.dbf+' DBF, '+stats.procesados+' procesados');
+    var fields = [];
+    var off = 32;
+    while (off + 32 <= headerLen - 1 && buf[off] !== 0x0D) {
+      var rawName = '';
+      for (var i = 0; i < 11; i++) {
+        var c = buf[off + i];
+        if (c === 0) break;
+        rawName += String.fromCharCode(c);
       }
-      return leidos;
+      var clean = rawName.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase();
+      if (clean.length > 0) {
+        fields.push({
+          name: clean,
+          rawName: rawName.trim(),
+          type: String.fromCharCode(buf[off + 11]),
+          len:  buf[off + 16] || buf.readUInt16LE(off + 16),
+          dec:  buf[off + 17] || 0
+        });
+      }
+      off += 32;
     }
+
+    var st = fs.statSync(filePath);
+
+    // Buscar archivo memo acompañante (.DBT o .FPT)
+    var memoPath = null;
+    var baseNoExt = filePath.replace(/\.dbf$/i, '');
+    if (fs.existsSync(baseNoExt + '.dbt')) memoPath = baseNoExt + '.dbt';
+    else if (fs.existsSync(baseNoExt + '.DBT')) memoPath = baseNoExt + '.DBT';
+    else if (fs.existsSync(baseNoExt + '.fpt')) memoPath = baseNoExt + '.fpt';
+    else if (fs.existsSync(baseNoExt + '.FPT')) memoPath = baseNoExt + '.FPT';
+
+    return {
+      path: filePath,
+      fileName: path.basename(filePath).toUpperCase(),
+      numRecords: numRecords,
+      headerLen: headerLen,
+      recordLen: recordLen,
+      lastUpd: lastUpd,
+      mtime: st.mtime,
+      size: st.size,
+      fields: fields,
+      fieldNames: fields.map(function (f) { return f.name; }),
+      memoPath: memoPath
+    };
+  } catch (_) {
+    return null;
+  }
+}
+
+function openMemo(struct) {
+  if (!struct.memoPath) return null;
+  try {
+    var fd = fs.openSync(struct.memoPath, 'r');
+    var hBuf = Buffer.alloc(512);
+    fs.readSync(fd, hBuf, 0, 512, 0);
+    var blockSize = 512;
+    if (/\.fpt$/i.test(struct.memoPath)) {
+      var bs = hBuf.readUInt16BE(6);
+      if (bs >= 32 && bs <= 16384) blockSize = bs;
+    }
+    return { fd: fd, blockSize: blockSize };
+  } catch (_) {
+    return null;
+  }
+}
+
+function readMemoBlock(memoInfo, blockNum) {
+  if (!memoInfo || !blockNum || blockNum <= 0) return '';
+  try {
+    var off = blockNum * memoInfo.blockSize;
+    var buf = Buffer.alloc(1024);
+    var n = fs.readSync(memoInfo.fd, buf, 0, 1024, off);
+    if (n <= 0) return '';
+    var txt = '';
+    for (var i = 0; i < n; i++) {
+      if (buf[i] === 0x1A || buf[i] === 0) break;
+      txt += decodeStr(buf, i, 1);
+    }
+    return txt.trim();
+  } catch (_) {
+    return '';
+  }
+}
+
+function closeMemo(memoInfo) {
+  if (memoInfo && memoInfo.fd) {
+    try { fs.closeSync(memoInfo.fd); } catch (_) {}
+  }
+}
+
+function readDbfRows(struct, maxLimit) {
+  var limit = maxLimit || 300000;
+  var buf;
+  try { buf = fs.readFileSync(struct.path); } catch (e) { return []; }
+
+  var memo = openMemo(struct);
+  var rows = [];
+  var pos = struct.headerLen;
+  var maxEnd = Math.min(struct.headerLen + struct.numRecords * struct.recordLen, buf.length);
+
+  while (pos + struct.recordLen <= maxEnd && rows.length < limit) {
+    var deleted = buf[pos] === 0x2A; // 0x2A ('*') indica borrado en FoxPro
+    if (!deleted) {
+      var row = {};
+      var fOff = pos + 1;
+      for (var fi = 0; fi < struct.fields.length; fi++) {
+        var f = struct.fields[fi];
+        var val = '';
+        if (f.type === 'M') {
+          // Campo Memo: el DBF guarda el puntero de bloque en texto de 10 bytes
+          var ptrStr = decodeStr(buf, fOff, f.len);
+          var bNum = parseInt(ptrStr, 10);
+          if (!isNaN(bNum) && bNum > 0 && memo) {
+            val = readMemoBlock(memo, bNum);
+          }
+        } else {
+          val = decodeStr(buf, fOff, f.len);
+        }
+        row[f.name] = val;
+        fOff += f.len;
+      }
+      rows.push(row);
+    }
+    pos += struct.recordLen;
+  }
+
+  closeMemo(memo);
+  return rows;
+}
+
+/* ═══════════════ MATCHING DE CAMPOS INTELIGENTE ═══════════════ */
+function findField(fieldNames, candidates) {
+  for (var ci = 0; ci < candidates.length; ci++) {
+    var c = candidates[ci].toLowerCase();
+    for (var fi = 0; fi < fieldNames.length; fi++) {
+      if (fieldNames[fi] === c || fieldNames[fi].indexOf(c) === 0) return fieldNames[fi];
+    }
+  }
+  for (var ci = 0; ci < candidates.length; ci++) {
+    var c = candidates[ci].toLowerCase();
+    if (c.length < 3) continue;
+    for (var fi = 0; fi < fieldNames.length; fi++) {
+      if (fieldNames[fi].indexOf(c) !== -1) return fieldNames[fi];
+    }
+  }
+  return null;
+}
+
+/* ═══════════════ BÚSQUEDA Y DESCUBRIMIENTO DE FUENTES ═══════════════ */
+function getCandidateDirectories(customTarget) {
+  var list = [];
+  if (customTarget && fs.existsSync(customTarget)) {
+    list.push(customTarget);
+  }
+
+  // Rutas conocidas en orden estricto de prioridad (Servidor en vivo PRIMERO)
+  var paths = [
+    'M:\\comp01',
+    'M:\\COMP01',
+    'M:\\COMP02',
+    'M:\\COMP03',
+    '\\\\192.168.0.185\\comp01',
+    '\\\\192.168.0.185\\M\\comp01',
+    '\\\\192.168.0.185\\mixnet\\comp01',
+    '\\\\192.168.0.185\\MIXNET\\comp01',
+    '\\\\192.168.0.185\\sistemas\\comp01',
+    'P:\\comp01',
+    'Z:\\comp01',
+    'C:\\MIXNET\\comp01',
+    'C:\\RESPAMIX\\MIX11 (servidor)\\comp01',
+    'D:\\MIXNET\\comp01'
+  ];
+
+  for (var i = 0; i < paths.length; i++) {
+    var p = paths[i];
+    if (list.indexOf(p) === -1) {
+      try {
+        if (fs.existsSync(p)) list.push(p);
+      } catch (_) {}
+    }
+  }
+  return list;
+}
+
+/* ═══════════════ EVALUACIÓN DE FRESCURA ("BASE VIVA") ═══════════════ */
+function inspectFreshness(dirPath) {
+  // Busca las tablas transaccionales de ventas/movimientos para ver la fecha del último movimiento real
+  var txFiles = ['MXTRAINV.DBF', 'MXRENFAC.DBF', 'MXENCFAC.DBF', 'YPENCFAC.DBF', 'MXTRACOB.DBF'];
+  var latestDate = null;
+  var latestFile = null;
+
+  for (var i = 0; i < txFiles.length; i++) {
+    var fp = path.join(dirPath, txFiles[i]);
+    try {
+      if (fs.existsSync(fp)) {
+        var st = fs.statSync(fp);
+        if (!latestDate || st.mtime > latestDate) {
+          latestDate = st.mtime;
+          latestFile = txFiles[i];
+        }
+      }
+    } catch (_) {}
+  }
+
+  var isLive = false;
+  var daysAgo = 9999;
+  if (latestDate) {
+    daysAgo = Math.floor((Date.now() - latestDate.getTime()) / (1000 * 60 * 60 * 24));
+    isLive = daysAgo <= 7; // Modificado en los últimos 7 días
+  }
+
+  return {
+    latestDate: latestDate,
+    latestFile: latestFile,
+    daysAgo: daysAgo,
+    isLive: isLive
   };
 }
 
-/* ─────────── MODO COMPLETO ─────────── */
-function modoCompleto(opts){
-  var presupuestoMs=(opts.tiempo||900)*1000;
-  var t0=Date.now(), finT=t0+presupuestoMs;
-  var stamp=stFecha();
+/* ═══════════════ CSV HELPERS ═══════════════ */
+function escCSV(v) {
+  if (v === null || v === undefined) v = '';
+  v = String(v).trim().replace(/\r\n/g, ' ').replace(/\n/g, ' ');
+  if (/[",;]/.test(v)) return '"' + v.replace(/"/g, '""') + '"';
+  return v;
+}
 
-  log('=========================================================');
-  log('  EXTRACTOR TOTAL MIXNET  (solo lectura)');
-  log('  Captura: inventario, clientes y tablas maestras');
-  log('  Presupuesto: '+Math.round(presupuestoMs/1000)+'s');
-  log('=========================================================');
+function saveOutputs(prefix, csvContent, jsonPayload) {
+  var d = new Date();
+  var pad = function(n) { return String(n).padStart(2, '0'); };
+  var stamp = '' + d.getFullYear() + pad(d.getMonth()+1) + pad(d.getDate()) + '_' + pad(d.getHours()) + pad(d.getMinutes());
+  var BOM = '\uFEFF';
 
-  // 1. Unidades
-  log('\n[PASO 1/4] Detectando unidades...');
-  var unidades=detectarUnidades();
-  if(!unidades.length){ log('[ERROR] No hay unidades.'); return; }
+  var savedFiles = [];
 
-  // 2. Escanear y clasificar
-  log('\n[PASO 2/4] Escaneando y clasificando tablas DBF...');
-  var esc=crearEscaneador(unidades);
-  while(esc.hayPendientes()&&Date.now()<finT) esc.recorrer(4000);
-  var meta=esc.meta;
-  log('\n  Fin escaneo: '+esc.stats.dbf+' DBF, '+esc.stats.procesados+' procesados, '+meta.length+' con datos utiles');
+  // Carpetas donde guardar: Carpeta actual + Escritorio
+  var targetDirs = [__dirname];
+  var u = process.env.USERPROFILE || '';
+  if (u) {
+    var desk = path.join(u, 'Desktop');
+    var escr = path.join(u, 'Escritorio');
+    if (fs.existsSync(desk) && targetDirs.indexOf(desk) === -1) targetDirs.push(desk);
+    if (fs.existsSync(escr) && targetDirs.indexOf(escr) === -1) targetDirs.push(escr);
+  }
 
-  // Clasificar por tipo
-  var porTipo={};
-  for(var mi=0;mi<meta.length;mi++){ var t=meta[mi].tipo; if(!porTipo[t])porTipo[t]=[]; porTipo[t].push(meta[mi]); }
-  log('\n  Tablas por tipo:');
-  var tipos=Object.keys(porTipo);
-  for(var ti=0;ti<tipos.length;ti++){ log('    '+tipos[ti]+': '+porTipo[tipos[ti]].length); }
-
-  // 3. Extraer datos de cada tipo y escribir CSV
-  log('\n[PASO 3/4] Extrayendo datos de cada tabla...');
-  var resumen=['TABLA_TIPO,CANTIDAD_TABLAS,REGISTROS_TOTAL'];
-  var archivos=[];
-  var contadores={ totalRegistros:0, tablas:0 };
-
-  for(var tt=0;tt<tipos.length;tt++){
-    var tipo=tipos[tt];
-    var tablas=porTipo[tipo];
-    // Ordenar por registros desc para ver la principal primero
-    tablas.sort(function(a,b){ return b.regs-a.regs; });
-    var regsTot=0;
-    var tipoRows=[];
-    // Unir las 2-3 tablas mas grandes del tipo (o todos si pocas)
-    var limite=Math.min(tablas.length,3);
-    for(var tb=0;tb<limite;tb++){
-      var clsTabla=tablas[tb];
-      var db=readDbfData(clsTabla.path);
-      if(!db||!db.rows.length) continue;
-      var headTodo=db.fields.map(function(f){return f.name;});
-      regsTot+=db.rows.length;
-      // Marcar origen
-      var withOrigen=db.rows.map(function(r){ var o={__tabla:clsTabla.nombre}; for(var k in r)o[k]=r[k]; return o; });
-      tipoRows=tipoRows.concat(withOrigen);
-      contadores.totalRegistros+=db.rows.length;
-      contadores.tablas++;
+  for (var i = 0; i < targetDirs.length; i++) {
+    var tDir = targetDirs[i];
+    try {
+      if (csvContent) {
+        var csvName = prefix + '_' + stamp + '.csv';
+        var csvPath = path.join(tDir, csvName);
+        fs.writeFileSync(csvPath, BOM + csvContent, 'utf8');
+        savedFiles.push(csvPath);
+      }
+      if (jsonPayload) {
+        var jsonName = prefix + '_' + stamp + '.json';
+        var jsonPath = path.join(tDir, jsonName);
+        fs.writeFileSync(jsonPath, JSON.stringify(jsonPayload, null, 2), 'utf8');
+        savedFiles.push(jsonPath);
+      }
+    } catch (e) {
+      logWarn('No pude guardar en ' + tDir + ': ' + e.message);
     }
-    if(!tipoRows.length) continue;
-    // Preparar columnas (unificar en la tabla mas grande)
-    var head=[];
-    for(var hi=0;hi<tipoRows.length;hi++){ Object.keys(tipoRows[hi]).forEach(function(k){ if(head.indexOf(k)===-1)head.push(k); }); }
-    if(head.indexOf('__tabla')===-1) head.unshift('__tabla');
-    var filename='mixnet_'+tipo.toLowerCase()+'_'+stamp+'.csv';
-    var fp=escribirCSVTodas(tipoRows,head,filename);
-    log('  ['+tipo+'] '+tipoRows.length+' registros en '+tipos.length+' tabla(s) -> '+fp);
-    archivos.push({tipo:tipo,archivo:fp,regs:tipoRows.length});
-    resumen.push(tipo+','+limite+','+regsTot);
   }
 
-  contadores.tablas=debounceCount(contadores.tablas);
-  log('\n  TABLAS EXTRAIDAS: '+contadores.tablas);
-  log('  REGISTROS TOTALES: '+contadores.totalRegistros);
+  return savedFiles;
+}
 
-  // 4. Reporte final
-  log('\n[PASO 4/4] Generando reportes...');
-  var elap=Math.round((Date.now()-t0)/1000);
-  // Resumen general
-  var resLines=['METRICA,VALOR'].concat(resumen);
-  resLines.push('TIEMPO_TOTAL_SEG,'+elap);
-  var resPath=escribirEnTodas(resLines.join('\r\n'),'resumen_todo_mixnet_'+stamp+'.csv');
-  log('  Resumen: '+resPath);
+/* ═══════════════ PROMPTS INTERACTIVOS EN CONSOLA ═══════════════ */
+function askQuestion(query, callback) {
+  var rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
+  rl.question(query, function(ans) {
+    rl.close();
+    callback(ans.trim());
+  });
+}
 
-  // Exploracion de todas las tablas y campos
-  var expLines=['TIPO,ARCHIVO,RUTA,REGISTROS,FECHA,CAMPOS'];
-  for(var ei=0;ei<meta.length;ei++){
-    var mm=meta[ei];
-    expLines.push([mm.tipo,mm.nombre,mm.path,mm.regs,
-      (mm.fecha? (mm.fecha.y+'/'+mm.fecha.m+'/'+mm.fecha.d):''),
-      mm.fn.slice(0,25).join(';')].map(escCSV).join(','));
+/* ═══════════════ PROGRAMA PRINCIPAL CONSCIENTE ═══════════════ */
+function start() {
+  banner('JJ PAPER — INSPECTOR Y EXTRACTOR TOTAL MIXNET v4.0');
+
+  log('Iniciando rastreo de fuentes de datos...');
+  log('Buscando servidor principal (IP 192.168.0.185 / M:\\comp01)...');
+
+  var candidates = getCandidateDirectories();
+
+  if (candidates.length === 0) {
+    logErr('No se encontró automáticamente ninguna carpeta de MixNet.');
+    say('');
+    say('  Por favor verifica que la unidad M:\\ esté montada o escribe la ruta de red.');
+    say('  Ejemplo: M:\\comp01  o  \\\\192.168.0.185\\comp01');
+    say('');
+    askQuestion('Escribe la ruta manualmente (o Enter para salir): ', function(custom) {
+      if (!custom) { logErr('Operación cancelada por el usuario.'); process.exit(1); }
+      if (!fs.existsSync(custom)) { logErr('La ruta indicada no existe o es inaccesible.'); process.exit(1); }
+      runInspectionOnDir(custom);
+    });
+    return;
   }
-  var expPath=escribirEnTodas(expLines.join('\r\n'),'exploracion_todo_mixnet_'+stamp+'.csv');
-  log('  Exploracion tablas: '+expPath);
 
-  log('\n=========================================================');
-  log('  TERMINADO EN '+elap+'s');
-  log('=========================================================');
-  log('  Archivos generados en C: (junto a los .bat) y escritorio:');
-  for(var ai=0;ai<archivos.length;ai++) log('    - '+path.basename(archivos[ai].archivo)+'  ['+archivos[ai].tipo+']  '+archivos[ai].regs+' regs');
-  log('    - '+path.basename(resPath)+'  [resumen]');
-  log('    - '+path.basename(expPath)+'  [exploracion tablas]');
-  log('=========================================================');
-}
-
-function debounceCount(n){ return n; }
-
-/* ─────────── MODO EXPLORAR ─────────── */
-function modoExplorar(opts){
-  var pres=(opts.tiempo||300)*1000, t0=Date.now();
-  log('=========================================================');
-  log('  EXPLORADOR TOTAL MIXNET');
-  log('=========================================================');
-  var unidades=detectarUnidades();
-  if(!unidades.length) return;
-  log('\n--- Escaneo (presupuesto '+Math.round(pres/1000)+'s) ---');
-  var esc=crearEscaneador(unidades);
-  while(esc.hayPendientes()&&Date.now()-t0<pres) esc.recorrer(4000);
-  var meta=esc.meta;
-  var porTipo={};
-  for(var i=0;i<meta.length;i++){ var t=meta[i].tipo; if(!porTipo[t])porTipo[t]=[]; porTipo[t].push(meta[i]); }
-  log('\n  RESUMEN: '+esc.stats.dbf+' DBF, '+meta.length+' con datos utiles en '+esc.stats.carpetas+' carpetas');
-  var tipos=Object.keys(porTipo);
-  log('\n  Tablas por tipo:');
-  for(var ti=0;ti<tipos.length;ti++){
-    var arr=porTipo[tipos[ti]];
-    log('    '+tipos[ti]+': '+arr.length);
-    for(var ai=0;ai<Math.min(4,arr.length);ai++)
-      log('      '+arr[ai].nombre+' ('+arr[ai].regs+' regs, '+(arr[ai].fn.slice(0,6).join(','))+'...)');
+  say('');
+  say('  Se encontraron las siguientes carpetas candidatas:');
+  for (var i = 0; i < candidates.length; i++) {
+    var c = candidates[i];
+    var f = inspectFreshness(c);
+    var status = f.isLive ? '🟢 ACTIVA (Hace ' + f.daysAgo + ' días)' : '🔴 POSIBLE RESPALDO (Hace ' + f.daysAgo + ' días)';
+    say('    [' + (i + 1) + '] ' + c + '  ->  ' + status);
   }
-  var stamp=stFecha();
-  var lines=['TIPO,ARCHIVO,RUTA,REGISTROS,FECHA,CAMPOS'];
-  for(var mi2=0;mi2<meta.length;mi2++){ var m=meta[mi2];
-    lines.push([m.tipo,m.nombre,m.path,m.regs,
-      (m.fecha?(m.fecha.y+'/'+m.fecha.m+'/'+m.fecha.d):''), m.fn.slice(0,25).join(';')].map(escCSV).join(',')); }
-  var fp=escribirEnTodas(lines.join('\r\n'),'exploracion_todo_mixnet_'+stamp+'.csv');
-  log('\n  Reporte: '+fp);
-}
+  say('');
 
-/* ─────────── MODO DIAGNOSTICO ─────────── */
-function modoDiagnostico(baseDir){
-  log('DIAGNOSTICO:'+baseDir);
-  if(!fs.existsSync(baseDir)){ log('[ERROR] no existe'); return; }
-  var entries; try{entries=fs.readdirSync(baseDir);}catch(e){log('[ERROR] '+e.message);return;}
-  var lines=['TIPO,ARCHIVO,REGISTROS,CAMPOS'];
-  for(var i=0;i<entries.length;i++){ if(!/\.dbf$/i.test(entries[i]))continue;
-    var fp=path.join(baseDir,entries[i]); var st; try{st=fs.statSync(fp);}catch(_){continue;} if(st.size<33)continue;
-    var l=readDbfHeaderFields(fp); if(!l)continue;
-    var cls=clasificar(l.fields);
-    lines.push([cls.tipo,entries[i],l.header.numRecords,cls.fn.join(';')].map(escCSV).join(','));
-    log('  ['+cls.tipo+'] '+entries[i]+' ('+l.header.numRecords+' regs) cod='+(cls.cod[0]||'-')+' desc='+(cls.desc[0]||'-')+' prec='+(cls.prec[0]||'-')+' stk='+(cls.stk[0]||'-')+' cli='+(cls.cli[0]||'-')+' rif='+(cls.rif[0]||'-'));
+  // Por defecto, preseleccionar la primera activa
+  var bestIdx = 0;
+  for (var i = 0; i < candidates.length; i++) {
+    if (inspectFreshness(candidates[i]).isLive) { bestIdx = i; break; }
   }
-  var fp2=escribirEnTodas(lines.join('\r\n'),'diagnostico_todo_'+stFecha()+'.csv');
-  log('\n  Reporte: '+fp2);
+
+  askQuestion('Selecciona la carpeta a inspeccionar [1-' + candidates.length + '] (Enter = [' + (bestIdx + 1) + ']): ', function(ans) {
+    var chosenIdx = bestIdx;
+    if (ans) {
+      var n = parseInt(ans, 10);
+      if (!isNaN(n) && n >= 1 && n <= candidates.length) chosenIdx = n - 1;
+    }
+    var targetDir = candidates[chosenIdx];
+    logOK('Carpeta seleccionada: ' + targetDir);
+    runInspectionOnDir(targetDir);
+  });
 }
 
-/* ─────────── MODO ESQUEMA ─────────── */
-function modoEsquema(filePath){
-  log('Esquema: '+filePath);
-  var l=readDbfHeaderFields(filePath);
-  if(!l){ log('[ERROR] no se pudo leer'); return; }
-  var cls=clasificar(l.fields);
-  log('Registros: '+l.header.numRecords+' | Fecha: '+l.header.lastUpd.y+'/'+l.header.lastUpd.m+'/'+l.header.lastUpd.d+' | Tipo: '+cls.tipo);
-  for(var i=0;i<l.fields.length;i++){ var f=l.fields[i]; var m='';
-    if(cls.cod.indexOf(f.name)!==-1)m+=' <COD'; if(cls.desc.indexOf(f.name)!==-1)m+=' <DESC';
-    if(cls.prec.indexOf(f.name)!==-1)m+=' <PREC'; if(cls.stk.indexOf(f.name)!==-1)m+=' <STOCK';
-    if(cls.rif.indexOf(f.name)!==-1)m+=' <RIF'; if(cls.tel.indexOf(f.name)!==-1)m+=' <TEL';
-    if(cls.dir.indexOf(f.name)!==-1)m+=' <DIR'; if(cls.fec.indexOf(f.name)!==-1)m+=' <FEC';
-    log('  '+(i+1).toString().padStart(2)+'. '+f.name+' ['+f.type+' '+f.len+']'+m); }
+function runInspectionOnDir(targetDir) {
+  banner('PASO 2: AUDITORÍA Y COMPARATIVA DE TABLAS EN VIVO');
+  log('Analizando tablas de inventario en ' + targetDir + '...');
+
+  // Buscar tablas candidatas de productos
+  var possibleTables = ['MXCTAINV.DBF', 'VICTAINV.DBF', 'JJCTAINV.DBF', 'CTAINV.DBF'];
+  var foundTables = [];
+
+  for (var i = 0; i < possibleTables.length; i++) {
+    var fp = path.join(targetDir, possibleTables[i]);
+    if (fs.existsSync(fp)) {
+      var struct = readDbfStructure(fp);
+      if (struct && struct.numRecords > 0) foundTables.push(struct);
+    }
+  }
+
+  if (foundTables.length === 0) {
+    logErr('No se encontró ninguna tabla de productos (MXCTAINV/VICTAINV) en ' + targetDir);
+    process.exit(1);
+  }
+
+  say('');
+  say('  TABLAS DE INVENTARIO DISPONIBLES EN ESTA CARPETA:');
+  for (var i = 0; i < foundTables.length; i++) {
+    var t = foundTables[i];
+    var modStr = t.mtime.toLocaleDateString() + ' ' + t.mtime.toLocaleTimeString();
+    say('    (' + (i + 1) + ') ' + t.fileName + '  |  Registros: ' + t.numRecords + '  |  Modificado: ' + modStr);
+  }
+  say('');
+
+  // Tomar una muestra comparativa de 3 productos entre las tablas encontradas
+  log('Leyendo muestra comparativa para verificación visual de precios...');
+  
+  var tableRows = {};
+  for (var i = 0; i < foundTables.length; i++) {
+    var t = foundTables[i];
+    tableRows[t.fileName] = readDbfRows(t, 200); // Primeros 200 para buscar testigos
+  }
+
+  // Buscar 3 códigos conocidos o los primeros 3 códigos con precio > 0
+  var sampleCodes = [];
+  var primary = tableRows[foundTables[0].fileName] || [];
+  for (var i = 0; i < primary.length && sampleCodes.length < 3; i++) {
+    var r = primary[i];
+    var cod = String(r.codart || r.codigo || '').trim();
+    var pA = parseFloat(r.precio_a || r.p1 || 0) || 0;
+    if (cod && pA > 0 && sampleCodes.indexOf(cod) === -1) sampleCodes.push(cod);
+  }
+
+  say('  ══════════════════════════════════════════════════════════════════════');
+  say('   VERIFICACIÓN EN PANTALLA: COMPARATIVA DE PRECIOS ENTRE TABLAS');
+  say('  ══════════════════════════════════════════════════════════════════════');
+
+  sampleCodes.forEach(function(cod) {
+    say('   ARTÍCULO CÓDIGO: ' + cod);
+    foundTables.forEach(function(t) {
+      var row = (tableRows[t.fileName] || []).filter(function(x) {
+        return String(x.codart || x.codigo || '').trim() === cod;
+      })[0];
+      if (row) {
+        var nom = String(row.nomart || row.descrip || '').trim();
+        var pA = parseFloat(row.precio_a || 0) || 0;
+        var pC = parseFloat(row.precio_c || 0) || 0;
+        var st = parseFloat(row.existe_act || 0) || 0;
+        say('     [' + t.fileName + '] ' + nom);
+        say('        -> Precio A (USD): $' + pA.toFixed(2) + '  |  Precio C (Bs): ' + pC.toFixed(2) + '  |  Stock: ' + st);
+      } else {
+        say('     [' + t.fileName + '] (No encontrado en muestra)');
+      }
+    });
+    say('   ------------------------------------------------------------------');
+  });
+
+  say('');
+  log('POR FAVOR CONFIRMA:');
+  say('  ¿Cuál de estas tablas contiene el PRECIO REAL que ves en MixNet hoy?');
+  
+  askQuestion('Elige el número de tabla a extraer [1-' + foundTables.length + '] (Enter = [1] ' + foundTables[0].fileName + '): ', function(choice) {
+    var selectedTable = foundTables[0];
+    if (choice) {
+      var n = parseInt(choice, 10);
+      if (!isNaN(n) && n >= 1 && n <= foundTables.length) selectedTable = foundTables[n - 1];
+    }
+
+    logOK('Tabla seleccionada para catálogo de productos: ' + selectedTable.fileName);
+    executeFullExtraction(targetDir, selectedTable);
+  });
 }
 
-/* ─────────── MAIN ─────────── */
-function main(){
-  var args=process.argv.slice(2);
-  var tiempo=900, modos=[];
-  for(var i=0;i<args.length;i++){ var a=args[i];
-    if(a==='--tiempo'){tiempo=parseInt(args[i+1],10)||900;i++;}
-    else modos.push(a); }
-  var opts={tiempo:tiempo};
-  if(!modos.length){ log('EXTRACTOR TOTAL MIXNET (automatico)'); modoCompleto(opts); return; }
-  var mode=modos[0];
-  if(mode==='--explorar'||mode==='--explore') return modoExplorar(opts);
-  if(mode==='--diagnostico'||mode==='--diag') return modoDiagnostico(modos[1]||'M:\\comp01');
-  if(mode==='--completo') return modoCompleto(opts);
-  if(mode==='--esquema') return modoEsquema(modos[1]||'');
-  if(mode==='--detectar') return detectarUnidades();
-  log('USO:\n  node extraer-todo-mixnet.cjs          flujo completo\n  node extraer-todo-mixnet.cjs --explorar\n  node extraer-todo-mixnet.cjs --diagnostico "RUTA"\n  node extraer-todo-mixnet.cjs --esquema "RUTA\\ARCH.DBF"');
+function executeFullExtraction(targetDir, productTableStruct) {
+  banner('PASO 3: EXTRACCIÓN Y DEDUPLICACIÓN DE PRODUCTOS Y CLIENTES');
+
+  // ════════════════════════════════════════════════════════════════════
+  // A) EXTRACCIÓN DE PRODUCTOS
+  // ════════════════════════════════════════════════════════════════════
+  log('Extrayendo productos desde ' + productTableStruct.fileName + '...');
+  var rawProducts = readDbfRows(productTableStruct, 500000);
+  logOK('Total registros leídos: ' + rawProducts.length);
+
+  var fn = productTableStruct.fieldNames;
+  var fCode  = findField(fn, ['codart', 'codigo', 'cod_art', 'id']);
+  var fName  = findField(fn, ['nomart', 'nombre', 'descrip', 'articulo']);
+  var fP1    = findField(fn, ['precio_a', 'precio1', 'p1', 'pvp', 'precio']);
+  var fP2    = findField(fn, ['precio_b', 'precio2', 'p2']);
+  var fP3    = findField(fn, ['precio_c', 'precio3', 'p3']);
+  var fP4    = findField(fn, ['precio_d', 'precio4', 'p4']);
+  var fCost  = findField(fn, ['costo_act', 'costo', 'ult_costo', 'cost_u']);
+  var fStock = findField(fn, ['existe_act', 'exist', 'stock', 'cantidad']);
+  var fGroup = findField(fn, ['grupo', 'familia', 'fam', 'cat']);
+  var fBrand = findField(fn, ['marca', 'mar']);
+  var fUnit  = findField(fn, ['unidad', 'uni', 'medida']);
+  var fIva   = findField(fn, ['iva', 'tasa_iva']);
+  var fProv  = findField(fn, ['ult_prove', 'proveedor', 'prov_asig']);
+
+  var productosMap = new Map(); // Normalización por SKU para CERO DUPLICADOS
+  var sinCodigo = 0;
+  var inactivos = 0;
+
+  for (var i = 0; i < rawProducts.length; i++) {
+    var r = rawProducts[i];
+    var cod = String(r[fCode] || '').trim().toUpperCase();
+    if (!cod) { sinCodigo++; continue; }
+
+    var nom = String(r[fName] || '').trim();
+    if (!nom) nom = '(SIN NOMBRE)';
+
+    var p1 = parseFloat(r[fP1] || 0) || 0;
+    var p2 = parseFloat(r[fP2] || 0) || 0;
+    var p3 = parseFloat(r[fP3] || 0) || 0;
+    var p4 = parseFloat(r[fP4] || 0) || 0;
+    var cost = parseFloat(r[fCost] || 0) || 0;
+    var stock = parseFloat(r[fStock] || 0) || 0;
+    if (stock < 0) stock = 0;
+
+    // Filtro de activos: debe tener precio > 0 O stock > 0
+    if (p1 <= 0 && stock <= 0 && cost <= 0) {
+      inactivos++;
+      continue;
+    }
+
+    var prodObj = {
+      codigo: cod,
+      nombre: nom,
+      precio_usd: p1,
+      precio_2: p2,
+      precio_bs: p3,
+      precio_4: p4,
+      costo: cost,
+      stock: stock,
+      grupo: String(r[fGroup] || '').trim(),
+      marca: String(r[fBrand] || '').trim(),
+      unidad: String(r[fUnit] || '').trim(),
+      iva: String(r[fIva] || '').trim(),
+      proveedor: String(r[fProv] || '').trim()
+    };
+
+    // Deduplicación inteligente: si ya existe, prevalece el que tenga stock o precio más alto
+    if (productosMap.has(cod)) {
+      var prev = productosMap.get(cod);
+      if (prodObj.stock > prev.stock || (prodObj.stock === prev.stock && prodObj.precio_usd > prev.precio_usd)) {
+        productosMap.set(cod, prodObj);
+      }
+    } else {
+      productosMap.set(cod, prodObj);
+    }
+  }
+
+  var productosFinales = Array.from(productosMap.values());
+  logOK('Productos activos y únicos procesados: ' + productosFinales.length);
+  log('  (Omitidos: ' + sinCodigo + ' sin código, ' + inactivos + ' inactivos sin precio ni stock)');
+
+  // CSV de Productos
+  var pCsvHeaders = 'CODIGO,PRODUCTO,PRECIO_USD,PRECIO_2,PRECIO_BS,COSTO_USD,STOCK,GRUPO,MARCA,UNIDAD,PROVEEDOR';
+  var pCsvRows = [pCsvHeaders];
+  productosFinales.forEach(function(p) {
+    pCsvRows.push([
+      escCSV(p.codigo), escCSV(p.nombre), p.precio_usd.toFixed(2), p.precio_2.toFixed(2),
+      p.precio_bs.toFixed(2), p.costo.toFixed(2), p.stock.toString(),
+      escCSV(p.grupo), escCSV(p.marca), escCSV(p.unidad), escCSV(p.proveedor)
+    ].join(','));
+  });
+
+  // ════════════════════════════════════════════════════════════════════
+  // B) EXTRACCIÓN DE CLIENTES
+  // ════════════════════════════════════════════════════════════════════
+  var clientFile = path.join(targetDir, 'MXCTACLI.DBF');
+  var clientesFinales = [];
+
+  if (fs.existsSync(clientFile)) {
+    log('Extrayendo clientes desde MXCTACLI.DBF (con soporte MEMO para emails)...');
+    var cStruct = readDbfStructure(clientFile);
+    if (cStruct) {
+      var rawClients = readDbfRows(cStruct, 500000);
+      var cfn = cStruct.fieldNames;
+
+      var fCliCod   = findField(cfn, ['codcli', 'codigo', 'cod_cli', 'id']);
+      var fCliNom   = findField(cfn, ['nomcli', 'razonsocial', 'razon', 'nombre']);
+      var fCliRif   = findField(cfn, ['cifoih', 'cifoi', 'cif', 'rif', 'cedula']);
+      var fCliDir1  = findField(cfn, ['direc1h', 'direc1', 'dir1', 'direccion1']);
+      var fCliDir2  = findField(cfn, ['direc2h', 'direc2', 'dir2']);
+      var fCliDir3  = findField(cfn, ['direc3h', 'direc3', 'dir3']);
+      var fCliDir4  = findField(cfn, ['direc4h', 'direc4', 'dir4']);
+      var fCliTlf1  = findField(cfn, ['tlf1h', 'tlf1', 'telefono1', 'tel1']);
+      var fCliTlf2  = findField(cfn, ['tlf2h', 'tlf2', 'telefono2', 'tel2']);
+      var fCliEmail = findField(cfn, ['email', 'emailngq', 'correo', 'mail']);
+      var fCliVen   = findField(cfn, ['codven', 'vendedor', 'vended']);
+      var fCliZona  = findField(cfn, ['zonacto', 'zona']);
+      var fCliSaldo = findField(cfn, ['saldo', 'saldoor']);
+
+      var EMAIL_REGEX = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
+      var clientesMap = new Map();
+
+      for (var i = 0; i < rawClients.length; i++) {
+        var r = rawClients[i];
+        var cCod = String(r[fCliCod] || '').trim();
+        var cNom = String(r[fCliNom] || '').trim();
+        if (!cCod && !cNom) continue;
+
+        // Limpiar RIF
+        var rawRif = String(r[fCliRif] || '').trim().toUpperCase().replace(/[\s.-]/g, '');
+        var rifClean = rawRif;
+        if (/^\d+$/.test(rawRif)) rifClean = 'V-' + rawRif;
+        else if (/^[JVEGP]\d+$/.test(rawRif)) rifClean = rawRif.charAt(0) + '-' + rawRif.substring(1);
+
+        // Concatenar dirección
+        var dirParts = [r[fCliDir1], r[fCliDir2], r[fCliDir3], r[fCliDir4]].filter(function(x) {
+          return x && String(x).trim();
+        }).map(function(x) { return String(x).trim(); });
+        var direccion = dirParts.join(' ').trim();
+
+        // Limpiar teléfonos
+        var t1 = String(r[fCliTlf1] || '').trim();
+        var t2 = String(r[fCliTlf2] || '').trim();
+
+        // Extraer email
+        var rawEmail = String(r[fCliEmail] || '').trim();
+        var emailMatch = rawEmail.match(EMAIL_REGEX);
+        var email = emailMatch ? emailMatch[0].toLowerCase() : '';
+
+        // Si el email no está en el campo email, buscar en dirección o notas memo
+        if (!email && r.memo) {
+          var memoMatch = String(r.memo).match(EMAIL_REGEX);
+          if (memoMatch) email = memoMatch[0].toLowerCase();
+        }
+
+        var cliObj = {
+          codigo: cCod,
+          nombre: cNom,
+          rif: rifClean,
+          telefono1: t1,
+          telefono2: t2,
+          email: email,
+          direccion: direccion,
+          vendedor_cod: String(r[fCliVen] || '').trim(),
+          zona: String(r[fCliZona] || '').trim(),
+          saldo: parseFloat(r[fCliSaldo] || 0) || 0
+        };
+
+        var key = cCod || rifClean || cNom;
+        if (!clientesMap.has(key)) {
+          clientesMap.set(key, cliObj);
+        }
+      }
+
+      clientesFinales = Array.from(clientesMap.values());
+      logOK('Clientes procesados con éxito: ' + clientesFinales.length);
+      var conEmail = clientesFinales.filter(function(x) { return x.email; }).length;
+      logOK('Clientes con correo detectado: ' + conEmail);
+    }
+  } else {
+    logWarn('No se encontró MXCTACLI.DBF en ' + targetDir + ' (solo se exportará productos).');
+  }
+
+  // CSV de Clientes
+  var cCsvRows = ['CODIGO,NOMBRE_EMPRESA,RIF,TELEFONO_1,TELEFONO_2,EMAIL,DIRECCION,VENDEDOR_COD,ZONA,SALDO'];
+  clientesFinales.forEach(function(c) {
+    cCsvRows.push([
+      escCSV(c.codigo), escCSV(c.nombre), escCSV(c.rif), escCSV(c.telefono1),
+      escCSV(c.telefono2), escCSV(c.email), escCSV(c.direccion),
+      escCSV(c.vendedor_cod), escCSV(c.zona), c.saldo.toFixed(2)
+    ].join(','));
+  });
+
+  // ════════════════════════════════════════════════════════════════════
+  // C) GUARDAR ARCHIVOS EN ESCRITORIO Y CARPETA LOCAL
+  // ════════════════════════════════════════════════════════════════════
+  banner('PASO 4: GUARDANDO ARCHIVOS CSV Y PAYLOAD SUPABASE');
+
+  var prodCsvStr = pCsvRows.join('\r\n');
+  var cliCsvStr  = cCsvRows.length > 1 ? cCsvRows.join('\r\n') : null;
+
+  var supabasePayload = {
+    exportado_el: new Date().toISOString(),
+    fuente: targetDir,
+    tabla_productos: productTableStruct.fileName,
+    resumen: {
+      total_productos: productosFinales.length,
+      total_clientes: clientesFinales.length
+    },
+    productos: productosFinales,
+    clientes: clientesFinales
+  };
+
+  var savedP = saveOutputs('mixnet_productos_reales', prodCsvStr, null);
+  var savedC = cliCsvStr ? saveOutputs('mixnet_clientes_reales', cliCsvStr, null) : [];
+  var savedJ = saveOutputs('mixnet_payload_supabase', null, supabasePayload);
+
+  say('');
+  logOK('ARCHIVOS GENERADOS EXITOSAMENTE:');
+  say('  📦 PRODUCTOS (CSV Excel):');
+  savedP.forEach(function(f) { say('     -> ' + f); });
+
+  if (savedC.length > 0) {
+    say('  👥 CLIENTES (CSV Excel):');
+    savedC.forEach(function(f) { say('     -> ' + f); });
+  }
+
+  say('  ⚡ PAYLOAD PARA SUPABASE (JSON):');
+  savedJ.forEach(function(f) { say('     -> ' + f); });
+
+  say('');
+  say('  ======================================================================');
+  say('    ¡LISTO! La extracción consciente v4.0 finalizó con éxito.');
+  say('    Lleva los archivos a JJ Paper para sincronizarlos en Supabase.');
+  say('  ======================================================================');
+  say('');
 }
 
-/* ─────────── WRAPPER ─────────── */
-try{ main(); }catch(e){
-  var msg=e&&e.stack?e.stack:String(e);
-  log('\n[FATAL] '+msg);
-  try{ fs.writeFileSync(path.join(__dirname,'error_todo.log'),'FECHA: '+new Date().toLocaleString()+'\r\n'+msg+'\r\n','utf8'); log('  Log: error_todo.log'); }catch(_){}
-  process.exit(1);
+// Arrancar el flujo
+try {
+  start();
+} catch (e) {
+  logErr('Error inesperado: ' + (e.stack || e.message));
 }

@@ -1,0 +1,33 @@
+========================================================================
+   JJ PAPER — GUÍA DE EXTRACCIÓN MIXNET v4.0 (PC WINDOWS 7)
+========================================================================
+
+Este paquete contiene el extractor reconstruido desde cero con validación
+consciente de precios en pantalla y extracción de clientes con emails.
+
+------------------------------------------------------------------------
+CÓMO USARLO EN LA PC DE LA TIENDA (WINDOWS 7):
+------------------------------------------------------------------------
+
+1. Abre esta carpeta en la PC de Windows 7.
+2. Haz doble clic en:
+      extraer-todo-mixnet.bat
+
+3. El programa detectará automáticamente si la unidad M:\comp01 o la IP
+   192.168.0.185 están activas.
+
+4. CHECKPOINT DE VALIDACIÓN EN PANTALLA:
+   El programa te mostrará una comparativa con 3 artículos y sus precios:
+      - En MXCTAINV.DBF (Precio actual)
+      - En VICTAINV.DBF (Posible precio anterior)
+
+5. Confirma cuál de las tablas coincide con el precio que ves en pantalla
+   en MixNet hoy.
+
+6. El script extraerá todo en 20 segundos y guardará en tu ESCRITORIO:
+   - mixnet_productos_reales_[FECHA].csv  (Para abrir en Excel)
+   - mixnet_clientes_reales_[FECHA].csv   (Para abrir en Excel)
+   - mixnet_payload_supabase_[FECHA].json (Para subir directo a la base de datos)
+
+¡Listo!
+========================================================================
