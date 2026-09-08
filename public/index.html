@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JJ Paper — Intelligence Suite & Multiagente IA</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <!-- CABECERA PRINCIPAL -->
+  <header class="app-header">
+    <div class="header-left">
+      <div class="brand-badge">JJ</div>
+      <div>
+        <h1 class="brand-title">JJ PAPER <span>· Intelligence Suite</span></h1>
+        <p class="brand-subtitle">MixNet FoxPro ⇄ Red Multiagente Gemini AI (7 Especialistas)</p>
+      </div>
+    </div>
+    <div class="header-right">
+      <div id="status-badge" class="status-badge connecting">
+        <span class="dot"></span> <span id="status-text">Conectando...</span>
+      </div>
+      <button id="btn-refresh" class="btn btn-secondary btn-sm" title="Refrescar datos desde MixNet">
+        🔄 Refrescar
+      </button>
+    </div>
+  </header>
+
+  <!-- NAVEGACION POR PESTAÑAS -->
+  <nav class="app-nav">
+    <button class="nav-tab active" data-tab="tab-dashboard">📊 Dashboard</button>
+    <button class="nav-tab" data-tab="tab-products">🏷️ Catálogo & Precios</button>
+    <button class="nav-tab" data-tab="tab-clients">👥 Radar de Clientes</button>
+    <button class="nav-tab" data-tab="tab-sales">🧾 Facturación & Ventas</button>
+    <button class="nav-tab ai-tab" data-tab="tab-ai">🤖 Agentes IA (7)</button>
+  </nav>
+
+  <!-- CONTENIDO PRINCIPAL -->
+  <main class="app-content">
+
+    <!-- 1. TAB DASHBOARD -->
+    <section id="tab-dashboard" class="tab-pane active">
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-icon blue">📦</div>
+          <div class="kpi-data">
+            <span class="kpi-value" id="kpi-products">--</span>
+            <span class="kpi-label">Productos Activos</span>
+          </div>
+          <div class="kpi-sub" id="kpi-products-sub">-- en stock físico</div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-icon green">👥</div>
+          <div class="kpi-data">
+            <span class="kpi-value" id="kpi-clients">--</span>
+            <span class="kpi-label">Clientes en Cartera</span>
+          </div>
+          <div class="kpi-sub" id="kpi-clients-sub">-- con WhatsApp verificado</div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-icon purple">🧾</div>
+          <div class="kpi-data">
+            <span class="kpi-value" id="kpi-sales">--</span>
+            <span class="kpi-label">Ventas Recientes</span>
+          </div>
+          <div class="kpi-sub">Registradas en Albaranes</div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-icon gold">🤖</div>
+          <div class="kpi-data">
+            <span class="kpi-value" id="kpi-agents">7</span>
+            <span class="kpi-label">Agentes Gemini Activos</span>
+          </div>
+          <div class="kpi-sub">Balanceo y cuota 100% lista</div>
+        </div>
+      </div>
+
+      <!-- BANNER DE AUDITORIA RAPIDA -->
+      <div class="card audit-banner">
+        <div>
+          <h3>Equipo de 7 Agentes IA Listo para Auditar</h3>
+          <p>Los especialistas analizan precios oficiales, productos sin rotación, clientes dormidos y redactan ofertas de WhatsApp con datos reales de MixNet.</p>
+        </div>
+        <button class="btn btn-primary" onclick="switchTab('tab-ai')">Abrir Chat con Agentes →</button>
+      </div>
+
+      <!-- MUESTRA DE DESTACADOS -->
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-header">
+            <h3>🏷️ Últimos Productos con Stock</h3>
+            <button class="btn-link" onclick="switchTab('tab-products')">Ver todos</button>
+          </div>
+          <div id="dash-products-list" class="mini-table">Cargando...</div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h3>👥 Clientes con Movimiento Reciente</h3>
+            <button class="btn-link" onclick="switchTab('tab-clients')">Ver cartera</button>
+          </div>
+          <div id="dash-clients-list" class="mini-table">Cargando...</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. TAB PRODUCTOS -->
+    <section id="tab-products" class="tab-pane">
+      <div class="toolbar">
+        <div class="search-box">
+          <input type="text" id="prod-search" placeholder="🔍 Buscar por código, descripción o marca...">
+        </div>
+        <div class="filter-group">
+          <button class="btn-filter active" data-filter="all">Todos</button>
+          <button class="btn-filter" data-filter="stock">En Stock (>0)</button>
+          <button class="btn-filter" data-filter="agotado">Agotados Vigentes (=0)</button>
+        </div>
+      </div>
+
+      <div class="card table-card">
+        <div class="table-responsive">
+          <table class="data-table" id="table-products">
+            <thead>
+              <tr>
+                <th>Código</th>
+                <th>Descripción</th>
+                <th>Precio Cliente USD</th>
+                <th>Precio Mayor USD</th>
+                <th>Precio Bs</th>
+                <th>Stock</th>
+                <th>Estado</th>
+                <th>Costo USD</th>
+                <th>Margen %</th>
+                <th>Últ. Movimiento</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-products">
+              <tr><td colspan="10" class="text-center">Cargando inventario...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. TAB CLIENTES -->
+    <section id="tab-clients" class="tab-pane">
+      <div class="toolbar">
+        <div class="search-box">
+          <input type="text" id="cli-search" placeholder="🔍 Buscar por razón social, RIF o teléfono...">
+        </div>
+        <div class="filter-group">
+          <button class="btn-filter-cli active" data-filter="all">Todos</button>
+          <button class="btn-filter-cli" data-filter="whatsapp">Con WhatsApp</button>
+          <button class="btn-filter-cli" data-filter="email">Con Email</button>
+        </div>
+      </div>
+
+      <div class="card table-card">
+        <div class="table-responsive">
+          <table class="data-table" id="table-clients">
+            <thead>
+              <tr>
+                <th>Código</th>
+                <th>Razón Social / Cliente</th>
+                <th>RIF</th>
+                <th>WhatsApp</th>
+                <th>Tel. Fijo</th>
+                <th>Email</th>
+                <th>Vendedor</th>
+                <th>Saldo USD</th>
+                <th>Acción</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-clients">
+              <tr><td colspan="9" class="text-center">Cargando cartera de clientes...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. TAB VENTAS -->
+    <section id="tab-sales" class="tab-pane">
+      <div class="card table-card">
+        <div class="card-header">
+          <h3>Historial Reciente de Albaranes y Facturación (MixNet)</h3>
+          <span class="badge" id="sales-count">-- ventas</span>
+        </div>
+        <div class="table-responsive">
+          <table class="data-table" id="table-sales">
+            <thead>
+              <tr>
+                <th>Documento</th>
+                <th>Fecha</th>
+                <th>Cliente</th>
+                <th>RIF</th>
+                <th>Total USD</th>
+                <th>Vendedor</th>
+                <th>Ejercicio</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-sales">
+              <tr><td colspan="7" class="text-center">Cargando ventas...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. TAB MULTIAGENTE IA (GEMINI) -->
+    <section id="tab-ai" class="tab-pane">
+      <div class="ai-layout">
+        <!-- BARRA LATERAL DE AGENTES -->
+        <aside class="ai-sidebar card">
+          <h3>Equipo de Agentes IA</h3>
+          <p class="text-muted small">Selecciona el especialista según tu consulta:</p>
+          <div class="agents-selector" id="agents-list">
+            <!-- Renderizado dinamicamente -->
+          </div>
+        </aside>
+
+        <!-- AREA DE CHAT -->
+        <div class="ai-chat-area card">
+          <div class="chat-header">
+            <div>
+              <h3 id="current-agent-title">Orquestador y Supervisor General</h3>
+              <p id="current-agent-desc" class="text-muted small">Coordinación ejecutiva de inventario, ventas y precios de MixNet.</p>
+            </div>
+            <div class="key-badge" id="current-key-badge">Llave 1 (Gemini 3.6 Flash)</div>
+          </div>
+
+          <!-- CHIPS RAPIDOS -->
+          <div class="quick-chips">
+            <button class="chip" onclick="askQuick('¿Cuáles son los 10 productos que más se están vendiendo y cuál es su stock actual?')">
+              ⚡ Top 10 más vendidos y stock
+            </button>
+            <button class="chip" onclick="askQuick('Audita los productos que tienen costo mayor al precio de venta o margen menor al 15%.')">
+              💰 Auditar márgenes bajos
+            </button>
+            <button class="chip" onclick="askQuick('¿Qué productos tienen más de 6 meses sin venderse para hacer una promoción de liquidación?')">
+              📦 Detectar stock frío / muerto
+            </button>
+            <button class="chip" onclick="askQuick('Redáctame un mensaje atractivo de WhatsApp para ofrecerle a los colegios listas escolares.')">
+              📢 Mensaje WhatsApp para Colegios
+            </button>
+          </div>
+
+          <!-- MENSAJES -->
+          <div class="chat-messages" id="chat-messages">
+            <div class="msg assistant">
+              <div class="msg-avatar">🤖</div>
+              <div class="msg-body">
+                <strong>¡Hola! Soy el Orquestador General de JJ Paper.</strong>
+                <p>Tengo acceso a la base de datos viva de MixNet (productos, existencias físicas, precios cliente en USD, cartera de clientes y facturación). Puedes hacerme preguntas en lenguaje cotidiano o elegir a cualquiera de los 7 especialistas en el panel izquierdo.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- FORMULARIO DE ENTRADA -->
+          <form id="chat-form" class="chat-input-row">
+            <input type="text" id="chat-input" placeholder="Pregunta algo sobre inventario, clientes, precios o pide una promoción..." autocomplete="off">
+            <button type="submit" id="btn-send-chat" class="btn btn-primary">
+              Consultar IA ↵
+            </button>
+          </form>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>

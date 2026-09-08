@@ -1,42 +1,52 @@
 ========================================================================
-   JJ PAPER -- EXTRACTOR INTELIGENTE MIXNET v5.2 (WINDOWS 7)
+   JJ PAPER -- INTELLIGENCE SUITE & MULTIAGENTE IA v6.0 (WINDOWS 7)
 ========================================================================
 
-Esta version v5.2 implementa la depuracion estricta de catalogo y precios:
+Esta version v6.0 transforma la PC de la tienda en un Centro de Inteligencia
+conectando MixNet con un equipo de 7 Agentes Especialistas de Gemini AI:
 
-  1. PRECIO OFICIAL DEL CLIENTE (PRECIO B):
-     - PRECIO_CLIENTE_USD: Toma directamente el Precio B de MixNet
-       (el precio PVP exacto que ve la vendedora en mostrador).
-     - PRECIO_MAYOR_USD:   Precio A (precio mayorista/distribuidor).
-     - PRECIO_BS:          Precio C (precio en Bolivares al cambio oficial).
-     - STOCK_ACTUAL:       Existencia fisica real en tienda/almacen.
-     - COSTO_USD:          Costo de compra/reposicion en USD.
+========================================================================
+LOS 7 AGENTES ESPECIALISTAS INTEGRADOS:
+========================================================================
+  1. Orquestador y Supervisor General (Llave 1)
+     -> Responde dudas generales, coordina al equipo y da resumenes ejecutivos.
+  2. Auditor de Precios Reales y Margenes (Llave 2)
+     -> Compara precios de lista vs. lo facturado en caja y costos de compra.
+  3. Especialista en Kardex y Rotacion (Llave 3)
+     -> Clasifica productos estrella, media rotacion, frios y stock muerto.
+  4. Analista de Cartera y CRM de Clientes (Llave 4)
+     -> Detecta clientes frecuentes, clientes en riesgo (>60 dias sin compra).
+  5. Inteligencia de Pedidos y Demanda (Llave 5)
+     -> Analiza cotizaciones, presupuestos y demanda insatisfecha.
+  6. Estratega de Promociones WhatsApp (Llave 6)
+     -> Redacta mensajes comerciales de WhatsApp listos para enviar a colegios y empresas.
+  7. Validador de Calidad y Cifras (Llave 7)
+     -> Garantiza que ningun dato sea inventado y coincida 100% con MixNet.
 
-  2. CRITERIO ESTRICTO DE PRODUCTO ACTIVO (DE ~2,900 A LOS ~800 REALES):
-     - Prioriza la tabla viva de la tienda (VICTAINV.DBF) sin duplicar tablas.
-     - Descarta articulos inactivos (estatus = '1' en FoxPro) y nombres con '***'.
-     - EN_STOCK: Productos con existencia fisica en tienda (stock > 0).
-     - AGOTADO_VIGENTE: Productos en 0 que tuvieron movimiento comercial reciente
-       (ventas o reposicion entre 2024 y 2026).
-     - HISTORICOS MUERTOS: Se descartan los mas de 1,200 articulos viejos
-       que tenian stock 0 y no se vendian desde hace 3 a 8 anos.
+========================================================================
+FORMAS DE USO EN LA PC DE WINDOWS 7:
+========================================================================
 
-  3. CARTERA DE CLIENTES:
-     - Clientes con RIF limpio, direccion y telefonos.
-     - Clasifica celulares para WhatsApp (0414, 0424, 0412, etc.) y telefonos fijos.
-     - Correos certificados cruzados desde campos, notas memo y agenda.
-
-  4. CERO PREGUNTAS (1 SOLO CLIC):
-     - No pregunta carpetas ni tablas.
-     - Hace todo solo en 3 segundos y guarda los archivos en tu ESCRITORIO.
-
+MODO 1: PANEL WEB INTERACTIVO CON CHAT MULTIAGENTE IA (RECOMENDADO)
 ------------------------------------------------------------------------
-INSTRUCCIONES:
+  1. Abre la carpeta archivos-pc.
+  2. Haz DOBLE CLIC en:
+        INICIAR-SISTEMA.bat
+  3. Se abrira tu navegador en:
+        http://localhost:3000
+     (Desde cualquier otra PC o tablet de la tienda: http://IP_DE_LA_PC:3000)
+  4. Podras navegar por los productos con stock, ver clientes con WhatsApp,
+     revisar facturacion reciente y chatear con los 7 Agentes IA.
+
+MODO 2: EXTRACCION RAPIDA DE ARCHIVOS A EXCEL (CSV / JSON)
 ------------------------------------------------------------------------
-  1. En la PC de Windows 7, abre la consola o carpeta archivos-pc.
-  2. Ejecuta: git pull origin main
-  3. Haz DOBLE CLIC en:
+  1. Haz DOBLE CLIC en:
         extraer-todo-mixnet.bat
-  4. Revisa tu Escritorio: tendras los archivos limpios para Excel.
+  2. En 3 segundos dejara los archivos limpios y depurados en tu ESCRITORIO.
 
+========================================================================
+ACTUALIZACION VIA GIT:
+========================================================================
+  En la consola de la PC ejecuta:
+     git pull origin main
 ========================================================================
