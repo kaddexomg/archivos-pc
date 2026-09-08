@@ -605,3 +605,182 @@ body {
   outline: none;
   border-color: #8b5cf6;
 }
+
+/* ─── BADGES DE ROTACION Y NOVEDAD ─── */
+.badge-rotacion-alta {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.badge-rotacion-media {
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.badge-rotacion-fria {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.badge-rotacion-muerta {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.banner-buttons {
+  display: flex;
+  gap: 10px;
+}
+
+/* ─── EXPLORADOR DE CODIGO & ARCHIVOS MIXNET ─── */
+.toolbar-explorer {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.explorer-input-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.explorer-input-group label {
+  font-weight: 600;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.explorer-input-group input {
+  flex: 1;
+  background: #0f172a;
+  border: 1px solid var(--border);
+  color: white;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.quick-dirs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.explorer-layout {
+  display: grid;
+  grid-template-columns: 360px 1fr;
+  gap: 16px;
+  min-height: 580px;
+}
+
+.file-tree-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.file-list-container {
+  flex: 1;
+  max-height: 520px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.file-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  background: #0f172a;
+  border: 1px solid transparent;
+  transition: all 0.15s ease;
+}
+
+.file-item:hover {
+  background: #1e293b;
+  border-color: #3b82f6;
+}
+
+.file-item.active {
+  background: rgba(59, 130, 246, 0.2);
+  border-color: #3b82f6;
+}
+
+.file-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.file-info {
+  flex: 1;
+  overflow: hidden;
+}
+
+.file-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: #f1f5f9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-meta {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.file-viewer-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.code-viewer-container {
+  flex: 1;
+  background: #090e17;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  overflow: auto;
+  font-family: Consolas, Monaco, "Andale Mono", "Ubuntu Mono", monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  max-height: 520px;
+  color: #e2e8f0;
+}
+
+.code-line {
+  display: flex;
+}
+
+.line-num {
+  width: 40px;
+  color: #475569;
+  text-align: right;
+  padding-right: 12px;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.line-content {
+  flex: 1;
+  white-space: pre;
+}
+
+.code-analysis-box {
+  margin-top: 14px;
+  background: #1e1b4b;
+  border: 1px solid #4338ca;
+  padding: 14px;
+  border-radius: 8px;
+  color: #e0e7ff;
+}
+

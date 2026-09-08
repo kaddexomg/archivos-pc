@@ -1,6 +1,6 @@
 /*
   ========================================================================
-  JJ PAPER -- CLIENTE WEB & CONTROLADOR MULTIAGENTE IA
+  JJ PAPER -- CLIENTE WEB & CONTROLADOR MULTIAGENTE IA v6.1
   ========================================================================
 */
 'use strict';
@@ -8,6 +8,7 @@
 var currentTab = 'tab-dashboard';
 var currentAgent = 'orchestrator';
 var currentAgentTitle = 'Orquestador y Supervisor General';
+var currentSelectedFilePath = null;
 
 var allProducts = [];
 var allClients = [];
@@ -19,6 +20,7 @@ document.addEventListener('DOMContentLoaded', function() {
   initTabs();
   initChat();
   initFilters();
+  initExplorer();
   loadStatusAndData();
 
   document.getElementById('btn-refresh').addEventListener('click', function() {
@@ -61,6 +63,7 @@ function switchTab(tabId) {
   if (tabId === 'tab-products' && allProducts.length === 0) loadProducts();
   if (tabId === 'tab-clients' && allClients.length === 0) loadClients();
   if (tabId === 'tab-sales' && allSales.length === 0) loadSales();
+  if (tabId === 'tab-code') scanExplorerDirectory();
 }
 
 // ─── CARGA DE DATOS DESDE LA API ───
@@ -85,6 +88,9 @@ function loadStatusAndData() {
         document.getElementById('kpi-clients-sub').innerText = (s.clientes_con_whatsapp || 0) + ' con WhatsApp directo';
 
         document.getElementById('kpi-sales').innerText = s.ventas_recientes_registradas || 0;
+        if (s.fecha_maxima_sistema) {
+          document.getElementById('kpi-max-date').innerText = 'Última fecha de operación: ' + s.fecha_maxima_sistema;
+        }
       }
 
       if (data.agents && data.agents.length > 0) {
@@ -103,7 +109,6 @@ function loadStatusAndData() {
 }
 
 function loadDashboardMinis() {
-  // Mini tabla de productos
   fetch('/api/products?filter=stock&limit=6')
     .then(function(r) { return r.json(); })
     .then(function(data) {
@@ -119,7 +124,6 @@ function loadDashboardMinis() {
       document.getElementById('dash-products-list').innerHTML = html;
     });
 
-  // Mini tabla de clientes
   fetch('/api/clients?filter=whatsapp&limit=6')
     .then(function(r) { return r.json(); })
     .then(function(data) {
@@ -136,35 +140,59 @@ function loadDashboardMinis() {
     });
 }
 
-// ─── TABLA DE PRODUCTOS ───
+// ─── TABLA DE PRODUCTOS (CON ROTACION Y NOVEDADES) ───
 function loadProducts() {
   var q = document.getElementById('prod-search').value;
   var filterBtn = document.querySelector('.btn-filter.active');
-  var filter = filterBtn ? filterBtn.getAttribute('data-filter') : 'all';
+  var filter = filterBtn ? filterBtn.getAttribute('data-filter') || 'all' : 'all';
+  var rotacion = filterBtn ? filterBtn.getAttribute('data-rotacion') || '' : '';
 
-  fetch('/api/products?q=' + encodeURIComponent(q) + '&filter=' + filter + '&limit=150')
+  var url = '/api/products?q=' + encodeURIComponent(q) + '&filter=' + filter + '&limit=150';
+  if (rotacion) url += '&rotacion=' + encodeURIComponent(rotacion);
+
+  fetch(url)
     .then(function(r) { return r.json(); })
     .then(function(data) {
       allProducts = data.products;
       var tbody = document.getElementById('tbody-products');
       if (allProducts.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="10" class="text-center">No se encontraron productos con ese criterio.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="12" class="text-center">No se encontraron productos con ese criterio.</td></tr>';
         return;
       }
 
       var html = '';
       allProducts.forEach(function(p) {
-        var badgeClass = p.estado_stock === 'EN_STOCK' ? 'badge-stock' : 'badge-agotado';
-        var badgeText = p.estado_stock === 'EN_STOCK' ? 'EN STOCK' : 'AGOTADO';
+        var badgeStockClass = p.estado_stock === 'EN_STOCK' ? 'badge-stock' : 'badge-agotado';
+        var badgeStockText = p.estado_stock === 'EN_STOCK' ? 'EN STOCK' : 'AGOTADO';
+
+        var badgeRotClass = 'badge-rotacion-media';
+        var badgeRotText = 'MEDIA';
+        if (p.estado_rotacion === 'ALTA_ROTACION') {
+          badgeRotClass = 'badge-rotacion-alta';
+          badgeRotText = 'ALTA ROTACION';
+        } else if (p.estado_rotacion === 'BAJA_ROTACION_FRIO') {
+          badgeRotClass = 'badge-rotacion-fria';
+          badgeRotText = 'FRIO (LENTO)';
+        } else if (p.estado_rotacion === 'STOCK_INMOVILIZADO') {
+          badgeRotClass = 'badge-rotacion-muerta';
+          badgeRotText = 'INMOVILIZADO';
+        } else if (p.estado_rotacion === 'AGOTADO_VIGENTE') {
+          badgeRotClass = 'badge-agotado';
+          badgeRotText = 'AGOTADO';
+        }
+
+        var novedadIcon = p.es_reciente_o_modificado ? ' <span title="Modificado recientemente" style="color:#fbbf24;">✨</span>' : '';
 
         html += '<tr>' +
           '<td><code>' + p.codigo + '</code></td>' +
-          '<td><strong>' + p.descripcion + '</strong></td>' +
+          '<td><strong>' + p.descripcion + '</strong>' + novedadIcon + '</td>' +
           '<td><strong>$' + p.precio_cliente_usd.toFixed(2) + '</strong></td>' +
           '<td>$' + p.precio_mayor_usd.toFixed(2) + '</td>' +
           '<td>' + p.precio_bs.toFixed(2) + ' Bs</td>' +
           '<td>' + p.stock_actual + '</td>' +
-          '<td><span class="badge ' + badgeClass + '">' + badgeText + '</span></td>' +
+          '<td><span class="badge ' + badgeStockClass + '">' + badgeStockText + '</span></td>' +
+          '<td><span class="badge ' + badgeRotClass + '">' + badgeRotText + '</span></td>' +
+          '<td>' + (p.dias_sin_movimiento < 9000 ? p.dias_sin_movimiento + ' d' : '--') + '</td>' +
           '<td>$' + p.costo_usd.toFixed(2) + '</td>' +
           '<td>' + (p.margen_porcentaje > 0 ? p.margen_porcentaje + '%' : '--') + '</td>' +
           '<td>' + (p.ultimo_movimiento_fmt || 'N/D') + '</td>' +
@@ -241,6 +269,144 @@ function loadSales() {
     });
 }
 
+// ─── EXPLORADOR DE ARCHIVOS Y CODIGO MIXNET ───
+function initExplorer() {
+  document.getElementById('btn-scan-dir').addEventListener('click', function() {
+    scanExplorerDirectory();
+  });
+}
+
+function setExplorerDir(dir) {
+  document.getElementById('explorer-path').value = dir;
+  scanExplorerDirectory();
+}
+
+function scanExplorerDirectory() {
+  var dir = document.getElementById('explorer-path').value.trim();
+  if (!dir) return;
+
+  var fileList = document.getElementById('file-list');
+  fileList.innerHTML = '<p class="text-muted small">Escaneando archivos en ' + escapeHtml(dir) + '...</p>';
+
+  fetch('/api/explorer/scan?path=' + encodeURIComponent(dir))
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      document.getElementById('file-count').innerText = (data.items ? data.items.length : 0) + ' archivos';
+      if (!data.items || data.items.length === 0) {
+        fileList.innerHTML = '<p class="text-muted small">No se encontraron archivos en este directorio.</p>';
+        return;
+      }
+
+      var html = '';
+      data.items.forEach(function(item) {
+        var icon = '📄';
+        if (item.type === 'dir') icon = '📁';
+        else if (item.ext === 'prg') icon = '💻';
+        else if (item.ext === 'dbf') icon = '📊';
+        else if (item.ext === 'ini') icon = '⚙️';
+        else if (item.ext === 'bat') icon = '⚡';
+
+        var sizeKb = item.sizeBytes ? Math.round(item.sizeBytes / 1024) + ' KB' : (item.type === 'dir' ? 'Carpeta' : '');
+
+        html += '<div class="file-item" onclick="openFile(\'' + escapeHtml(item.path).replace(/\\/g, '\\\\') + '\')">' +
+          '<span class="file-icon">' + icon + '</span>' +
+          '<div class="file-info">' +
+            '<div class="file-name">' + escapeHtml(item.name) + '</div>' +
+            '<div class="file-meta">' + sizeKb + '</div>' +
+          '</div>' +
+        '</div>';
+      });
+
+      fileList.innerHTML = html;
+    })
+    .catch(function(err) {
+      fileList.innerHTML = '<p class="text-muted small" style="color:#ef4444;">Error: ' + escapeHtml(err.message) + '</p>';
+    });
+}
+
+function openFile(filePath) {
+  currentSelectedFilePath = filePath;
+  document.querySelectorAll('.file-item').forEach(function(el) { el.classList.remove('active'); });
+
+  document.getElementById('current-file-name').innerText = filePath.split('\\').pop() || filePath;
+  document.getElementById('btn-analyze-code').style.display = 'inline-flex';
+
+  var viewer = document.getElementById('file-viewer-content');
+  viewer.innerHTML = '<p class="text-muted">Cargando archivo...</p>';
+
+  fetch('/api/explorer/read?path=' + encodeURIComponent(filePath))
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (!data.success) {
+        viewer.innerHTML = '<p style="color:#ef4444;">Error: ' + escapeHtml(data.error) + '</p>';
+        return;
+      }
+
+      if (data.type === 'dbf') {
+        var fieldsList = data.fields.map(function(f) { return f.name + ' (' + f.type + ',' + f.len + ')'; }).join(', ');
+        var html = '<div style="margin-bottom:12px;">' +
+          '<strong>Tabla FoxPro DBF:</strong> ' + escapeHtml(data.fileName) + ' | ' + data.numRecords + ' registros<br>' +
+          '<small style="color:#94a3b8;">Campos: ' + escapeHtml(fieldsList) + '</small>' +
+        '</div>';
+
+        html += '<table class="data-table" style="font-size:11px;"><thead><tr>';
+        data.fields.slice(0, 8).forEach(function(f) { html += '<th>' + f.name + '</th>'; });
+        html += '</tr></thead><tbody>';
+
+        (data.sampleRows || []).slice(0, 30).forEach(function(row) {
+          html += '<tr>';
+          data.fields.slice(0, 8).forEach(function(f) { html += '<td>' + escapeHtml(row[f.name] || '') + '</td>'; });
+          html += '</tr>';
+        });
+        html += '</tbody></table>';
+        viewer.innerHTML = html;
+      } else {
+        // Texto / PRG / INI
+        var html = '<div class="code-container">';
+        (data.lines || []).forEach(function(line, idx) {
+          html += '<div class="code-line">' +
+            '<span class="line-num">' + (idx + 1) + '</span>' +
+            '<span class="line-content">' + escapeHtml(line) + '</span>' +
+          '</div>';
+        });
+        html += '</div>';
+        viewer.innerHTML = html;
+      }
+    });
+}
+
+function analyzeCurrentFile() {
+  if (!currentSelectedFilePath) return;
+
+  var viewer = document.getElementById('file-viewer-content');
+  var existingContent = viewer.innerHTML;
+
+  var analysisBox = document.createElement('div');
+  analysisBox.className = 'code-analysis-box';
+  analysisBox.innerHTML = '<strong>🤖 Agente 7 (Auditor de Código MixNet):</strong><p>⏳ Leyendo e interpretando lógica de ' + escapeHtml(currentSelectedFilePath) + '...</p>';
+  viewer.prepend(analysisBox);
+
+  fetch('/api/explorer/analyze', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      path: currentSelectedFilePath
+    })
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.error) {
+        analysisBox.innerHTML = '<strong>Error de Análisis:</strong><p>' + escapeHtml(data.error) + '</p>';
+      } else {
+        analysisBox.innerHTML = '<strong>🤖 ' + escapeHtml(data.agente) + ' <span class="key-badge">Llave ' + data.llave + '</span>:</strong>' +
+          '<div>' + renderMarkdown(data.analisis) + '</div>';
+      }
+    })
+    .catch(function(err) {
+      analysisBox.innerHTML = '<strong>Error:</strong><p>' + escapeHtml(err.message) + '</p>';
+    });
+}
+
 // ─── FILTROS Y BUSQUEDA EN TABLAS ───
 function initFilters() {
   var prodSearch = document.getElementById('prod-search');
@@ -298,7 +464,7 @@ function renderAgentsList(list) {
       var keyNum = this.getAttribute('data-key');
 
       document.getElementById('current-agent-title').innerText = currentAgentTitle;
-      document.getElementById('current-key-badge').innerText = 'Llave ' + keyNum + ' (Gemini 3.6 Flash)';
+      document.getElementById('current-key-badge').innerText = 'Llave ' + keyNum + ' (Cascada Activa)';
     });
   });
 }
@@ -325,20 +491,17 @@ function askQuick(prompt) {
 function sendChatMessage(text) {
   var chatMessages = document.getElementById('chat-messages');
 
-  // Agregar mensaje del usuario
   var userMsg = document.createElement('div');
   userMsg.className = 'msg user';
   userMsg.innerHTML = '<div class="msg-avatar">👤</div><div class="msg-body"><p>' + escapeHtml(text) + '</p></div>';
   chatMessages.appendChild(userMsg);
 
-  // Agregar mensaje de carga del agente
   var aiMsg = document.createElement('div');
   aiMsg.className = 'msg assistant';
   aiMsg.innerHTML = '<div class="msg-avatar">🤖</div><div class="msg-body"><strong>' + escapeHtml(currentAgentTitle) + ':</strong><p>⏳ Analizando datos de MixNet...</p></div>';
   chatMessages.appendChild(aiMsg);
   chatMessages.scrollTop = chatMessages.scrollHeight;
 
-  // Llamada a la API
   fetch('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -350,11 +513,12 @@ function sendChatMessage(text) {
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (data.error) {
-        aiMsg.querySelector('.msg-body').innerHTML = '<strong>Error:</strong><p>' + escapeHtml(data.error) + '</p>';
+        aiMsg.querySelector('.msg-body').innerHTML = '<strong>Aviso de Consulta:</strong><p>' + escapeHtml(data.error) + '</p>';
       } else {
         var formattedReply = renderMarkdown(data.reply);
+        var modelNote = data.modelUsed ? ' · <small>' + data.modelUsed.replace('models/', '') + '</small>' : '';
         aiMsg.querySelector('.msg-body').innerHTML =
-          '<strong>' + escapeHtml(data.agentTitle) + ' <span class="key-badge">Llave ' + data.keyUsed + '</span>:</strong>' +
+          '<strong>' + escapeHtml(data.agentTitle) + ' <span class="key-badge">Llave ' + data.keyUsed + modelNote + '</span>:</strong>' +
           '<div>' + formattedReply + '</div>';
       }
       chatMessages.scrollTop = chatMessages.scrollHeight;
@@ -368,7 +532,6 @@ function escapeHtml(str) {
   return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-// Renderizador Markdown básico para respuestas de IA
 function renderMarkdown(md) {
   if (!md) return '';
   var lines = md.split('\n');
@@ -378,13 +541,11 @@ function renderMarkdown(md) {
   lines.forEach(function(line) {
     var trimmed = line.trim();
 
-    // Negritas e Itálicas
     var l = trimmed
       .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
       .replace(/\*(.*?)\*/g, '<em>$1</em>')
       .replace(/`([^`]+)`/g, '<code>$1</code>');
 
-    // Listas
     if (/^[*-]\s+/.test(trimmed)) {
       if (!inList) { html.push('<ul>'); inList = true; }
       html.push('<li>' + l.replace(/^[*-]\s+/, '') + '</li>');

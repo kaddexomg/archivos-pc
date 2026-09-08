@@ -336,7 +336,33 @@ function extractActiveProducts(liveDir) {
   var productsMap = new Map();
   var totalRawFound = rows.length;
   var inactiveCount = 0;
-  var obsoleteCount = 0;
+  // PASO 1: Determinar dinamicamente la fecha maxima de operacion del sistema
+  var highestDate = '';
+  for (var i = 0; i < rows.length; i++) {
+    var rx = rows[i];
+    var ds = [
+      String(rx[fFSal] || '').trim().replace(/[^0-9]/g, ''),
+      String(rx[fFMod] || '').trim().replace(/[^0-9]/g, ''),
+      String(rx[fFCos] || '').trim().replace(/[^0-9]/g, ''),
+      String(rx[fFCrea] || '').trim().replace(/[^0-9]/g, '')
+    ];
+    for (var di = 0; di < ds.length; di++) {
+      var dStr = ds[di];
+      if (dStr.length === 8 && dStr > highestDate && dStr < '20300000') {
+        highestDate = dStr;
+      }
+    }
+  }
+
+  function parseFoxDate(str) {
+    if (!str || str.length < 8) return null;
+    var y = parseInt(str.substring(0, 4), 10);
+    var m = parseInt(str.substring(4, 6), 10) - 1;
+    var d = parseInt(str.substring(6, 8), 10);
+    return new Date(y, m, d);
+  }
+
+  var maxDateObj = parseFoxDate(highestDate) || new Date();
 
   for (var ri = 0; ri < rows.length; ri++) {
     var r = rows[ri];
@@ -393,12 +419,15 @@ function extractActiveProducts(liveDir) {
     if (dCos > lastActivity) lastActivity = dCos;
     if (dCrea > lastActivity && !lastActivity) lastActivity = dCrea;
 
-    // CRITERIO 4: VIGENCIA Y EXISTENCIA FISICA (EL CRITERIO CRUCIAL DEL CATALOGO ACTIVO)
+    var lastDateObj = parseFoxDate(lastActivity);
+    var daysSince = lastDateObj ? Math.round((maxDateObj - lastDateObj) / (1000 * 60 * 60 * 24)) : 9999;
+
+    // CRITERIO 4: VIGENCIA DINAMICA Y EXISTENCIA FISICA (SIN FECHAS FIJAS CABLEADAS)
     // 1) Si tiene stock fisico (stock > 0): ES ACTIVO 100% (mercancia en tienda para venta inmediata).
-    // 2) Si stock es 0: SOLO se considera activo si tuvo venta, compra o cambio de precio reciente (2024 en adelante).
-    //    Articulos con stock 0 cuya ultima venta/movimiento fue en 2023 o antes (o vacia): SON OBSOLETOS / HISTORICOS.
+    // 2) Si stock es 0: SOLO se considera activo si tuvo venta, compra o cambio de precio reciente
+    //    (dentro de los ultimos 365 dias relativos a la fecha de maxima operacion de la empresa).
     var hasPhysicalStock = stock > 0;
-    var hasRecentActivity = (lastActivity && lastActivity >= '20240101');
+    var hasRecentActivity = (daysSince <= 365);
 
     if (!hasPhysicalStock && !hasRecentActivity) {
       obsoleteCount++;

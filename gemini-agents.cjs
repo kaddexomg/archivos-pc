@@ -3,6 +3,7 @@
   JJ PAPER -- MOTOR MULTIAGENTE GEMINI AI (7 AGENTES ESPECIALISTAS)
   ========================================================================
   Compatible 100% con Node 13 (Windows 7) - Cero dependencias npm externas.
+  Incluye cascada multi-modelo y multi-llave para evitar caídas por cuota o spikes.
 */
 'use strict';
 
@@ -24,13 +25,13 @@ var DEFAULT_KEY_TOKENS = [
 ];
 
 var KEYS = [
-  { id: 1, key: decodeKey(DEFAULT_KEY_TOKENS[0]), role: 'orchestrator', title: 'Orquestador y Supervisor General' },
-  { id: 2, key: decodeKey(DEFAULT_KEY_TOKENS[1]), role: 'prices',       title: 'Auditor de Precios Reales y Margenes' },
-  { id: 3, key: decodeKey(DEFAULT_KEY_TOKENS[2]), role: 'inventory',    title: 'Especialista en Kardex y Rotacion' },
-  { id: 4, key: decodeKey(DEFAULT_KEY_TOKENS[3]), role: 'clients',      title: 'Analista de Cartera y CRM de Clientes' },
-  { id: 5, key: decodeKey(DEFAULT_KEY_TOKENS[4]), role: 'orders',       title: 'Inteligencia de Pedidos y Demanda' },
-  { id: 6, key: decodeKey(DEFAULT_KEY_TOKENS[5]), role: 'marketing',    title: 'Estratega de Promociones WhatsApp' },
-  { id: 7, key: decodeKey(DEFAULT_KEY_TOKENS[6]), role: 'auditor',      title: 'Validador de Cifras y Calidad' }
+  { id: 1, key: decodeKey(DEFAULT_KEY_TOKENS[0]), role: 'orchestrator',    title: 'Orquestador y Supervisor General' },
+  { id: 2, key: decodeKey(DEFAULT_KEY_TOKENS[1]), role: 'prices',          title: 'Auditor de Precios Reales y Margenes' },
+  { id: 3, key: decodeKey(DEFAULT_KEY_TOKENS[2]), role: 'inventory',       title: 'Especialista en Kardex y Rotacion' },
+  { id: 4, key: decodeKey(DEFAULT_KEY_TOKENS[3]), role: 'clients',         title: 'Analista de Cartera y CRM de Clientes' },
+  { id: 5, key: decodeKey(DEFAULT_KEY_TOKENS[4]), role: 'orders',          title: 'Inteligencia de Pedidos y Demanda' },
+  { id: 6, key: decodeKey(DEFAULT_KEY_TOKENS[5]), role: 'marketing',       title: 'Estratega de Promociones WhatsApp' },
+  { id: 7, key: decodeKey(DEFAULT_KEY_TOKENS[6]), role: 'code_inspector',  title: 'Auditor de Codigo Fuente MixNet & Acciones' }
 ];
 
 // Si existe keys.json en el directorio, sobreescribir llaves personalizadas
@@ -48,7 +49,12 @@ try {
   }
 } catch (_) {}
 
-var PRIMARY_MODEL = 'models/gemini-3.6-flash';
+// Cascada de modelos para alta disponibilidad
+var FALLBACK_MODELS = [
+  'models/gemini-3.6-flash',
+  'models/gemini-flash-latest',
+  'models/gemini-2.5-flash'
+];
 
 // Prompts de especialidad por cada rol
 var AGENT_PROMPTS = {
@@ -71,7 +77,7 @@ var AGENT_PROMPTS = {
     'Tu objetivo es auditar la velocidad de venta de los articulos de papeleria:',
     '- Alta Rotacion (Estrellas): Productos que se mueven constantemente y nunca deben agotarse.',
     '- Media Rotacion: Productos estables.',
-    '- Baja Rotacion (Frios): Mercancia con mas de 90 dias sin facturar.',
+    '- Baja Rotacion (Frios): Mercancia con meses sin facturar.',
     '- Stock Muerto / Obsoleto: Articulos con meses o anos sin salida, que representan capital atrapado.',
     'Propone liquidaciones, combos o acciones concretas para mover el inventario detenido.'
   ].join(' '),
@@ -79,7 +85,7 @@ var AGENT_PROMPTS = {
   clients: [
     'Eres el Analista de Cartera de Clientes y CRM de JJ Paper.',
     'Tu funcion es analizar la recurrencia de compra de librerias, colegios, empresas y revendedores.',
-    'Identificas clientes fieles (VIP), clientes en riesgo (que llevan mas de 30 o 60 dias sin comprar) y clientes perdidos.',
+    'Identificas clientes fieles (VIP), clientes en riesgo (que llevan tiempo sin comprar) y clientes perdidos.',
     'Siempre sugieres acciones de recuperacion con contacto directo por WhatsApp.'
   ].join(' '),
 
@@ -95,16 +101,17 @@ var AGENT_PROMPTS = {
     'Incluye siempre llamados a la accion claros (CTA) y emojis apropiados.'
   ].join(' '),
 
-  auditor: [
-    'Eres el Auditor de Calidad y Verificacion de Datos de JJ Paper.',
-    'Tu trabajo es revisar que ninguna cifra sea inventada. Verificas que los codigos SKU, cantidades de stock, precios y balances coincidan exactamente con la informacion real extraida de las bases de datos MixNet.',
-    'Si hay alguna duda o inconsistencia en los datos fuente, lo adviertes claramente.'
+  code_inspector: [
+    'Eres el Auditor de Codigo Fuente e Ingenieria Inversa de MixNet en JJ Paper.',
+    'Tu mision es inspeccionar y descifrar el codigo fuente en FoxPro/dBase/Clipper (.PRG), scripts (.BAT), archivos de configuracion (.INI) y tablas (.DBF) del sistema de facturacion MixNet.',
+    'Analizas como busca los productos el programa original, que tablas abre (VICTAINV, MXCTAINV, MXRENFAC), como lee los precios A, B, C y como calcula el inventario.',
+    'Explicas la logica tecnica en espanol claro y recomiendas la mejor forma de buscar y validar los datos para que nuestra suite coincida 100% con MixNet.'
   ].join(' ')
 };
 
-// Llamada HTTP nativa a la API de Gemini (compatible con Node 13)
-function callGeminiRaw(apiKey, systemPrompt, userMessage, callback) {
-  var url = 'https://generativelanguage.googleapis.com/v1beta/' + PRIMARY_MODEL + ':generateContent?key=' + apiKey;
+// Llamada HTTP individual a un modelo especifico
+function callGeminiSingle(apiKey, modelName, systemPrompt, userMessage, callback) {
+  var url = 'https://generativelanguage.googleapis.com/v1beta/' + modelName + ':generateContent?key=' + apiKey;
 
   var bodyObj = {
     contents: [
@@ -117,7 +124,7 @@ function callGeminiRaw(apiKey, systemPrompt, userMessage, callback) {
     ],
     generationConfig: {
       temperature: 0.3,
-      maxOutputTokens: 2048
+      maxOutputTokens: 2500
     }
   };
 
@@ -134,7 +141,7 @@ function callGeminiRaw(apiKey, systemPrompt, userMessage, callback) {
     res.on('data', function(chunk) { data += chunk; });
     res.on('end', function() {
       if (res.statusCode !== 200) {
-        var errMsg = 'Error HTTP ' + res.statusCode;
+        var errMsg = 'HTTP ' + res.statusCode;
         try {
           var errJson = JSON.parse(data);
           if (errJson.error && errJson.error.message) errMsg = errJson.error.message;
@@ -167,12 +174,36 @@ function callGeminiRaw(apiKey, systemPrompt, userMessage, callback) {
   req.end();
 }
 
-// Ejecucion con tolerancia a fallos y rotacion automatica de llaves
+// Llamada robusta que prueba la cascada de modelos en una llave
+function callWithModelFallback(apiKey, systemPrompt, userMessage, callback) {
+  var modelIdx = 0;
+
+  function attemptModel() {
+    if (modelIdx >= FALLBACK_MODELS.length) {
+      callback(new Error('Todos los modelos de Gemini fallaron en esta llave.'), null);
+      return;
+    }
+
+    var currentModel = FALLBACK_MODELS[modelIdx];
+    callGeminiSingle(apiKey, currentModel, systemPrompt, userMessage, function(err, reply) {
+      if (!err && reply) {
+        callback(null, reply, currentModel);
+      } else {
+        // Si hay error de cuota o spike (503, 429, 404), intentar siguiente modelo
+        modelIdx++;
+        attemptModel();
+      }
+    });
+  }
+
+  attemptModel();
+}
+
+// Ejecucion con tolerancia total a fallos (Cascada de Modelos + Rotacion de las 7 Llaves)
 function askAgent(roleName, userPrompt, contextData, callback) {
   var targetRole = roleName || 'orchestrator';
   var sysPrompt = AGENT_PROMPTS[targetRole] || AGENT_PROMPTS.orchestrator;
 
-  // Si se incluye contexto de datos (JSON), se inyecta en el prompt
   var fullMessage = userPrompt;
   if (contextData) {
     fullMessage = 'DATOS REALES DEL SISTEMA MIXNET (JJ PAPER):\n' +
@@ -190,48 +221,50 @@ function askAgent(roleName, userPrompt, contextData, callback) {
   }
   if (!preferredKeyObj) preferredKeyObj = KEYS[0];
 
-  // Intentar primero con la llave asignada
-  callGeminiRaw(preferredKeyObj.key, sysPrompt, fullMessage, function(err, reply) {
+  // 1. Intentar primero con la llave asignada
+  callWithModelFallback(preferredKeyObj.key, sysPrompt, fullMessage, function(err, reply, modelUsed) {
     if (!err && reply) {
       callback(null, {
         agent: targetRole,
         agentTitle: preferredKeyObj.title,
         keyUsed: preferredKeyObj.id,
+        modelUsed: modelUsed,
         reply: reply
       });
       return;
     }
 
-    // Fallback: Si fallo por quota (429) o rate limit, rotar por las demas llaves
-    console.log('  [Aviso IA] Llave ' + preferredKeyObj.id + ' fallo (' + (err ? err.message : '') + '). Rotando a llave alternativa...');
-    
-    var tryNextKey = function(keyIndex) {
-      if (keyIndex >= KEYS.length) {
-        callback(new Error('Todas las llaves del pool multiagente fallaron o alcanzaron limite de cuota.'), null);
+    // 2. Fallback: Si fallo, rotar por el pool de las otras 6 llaves
+    console.log('  [Aviso IA] Llave ' + preferredKeyObj.id + ' en rol ' + targetRole + ' fallo (' + (err ? err.message : '') + '). Rotando a llave alternativa...');
+
+    var tryKeyIndex = function(kIndex) {
+      if (kIndex >= KEYS.length) {
+        callback(new Error('El pool completo de 7 llaves de Gemini reporto limite de cuota o indisponibilidad temporal.'), null);
         return;
       }
-      if (KEYS[keyIndex].id === preferredKeyObj.id) {
-        tryNextKey(keyIndex + 1);
+      if (KEYS[kIndex].id === preferredKeyObj.id) {
+        tryKeyIndex(kIndex + 1);
         return;
       }
 
-      var kObj = KEYS[keyIndex];
-      callGeminiRaw(kObj.key, sysPrompt, fullMessage, function(subErr, subReply) {
+      var altKeyObj = KEYS[kIndex];
+      callWithModelFallback(altKeyObj.key, sysPrompt, fullMessage, function(subErr, subReply, subModel) {
         if (!subErr && subReply) {
           callback(null, {
             agent: targetRole,
             agentTitle: preferredKeyObj.title,
-            keyUsed: kObj.id,
+            keyUsed: altKeyObj.id,
             fallbackFrom: preferredKeyObj.id,
+            modelUsed: subModel,
             reply: subReply
           });
         } else {
-          tryNextKey(keyIndex + 1);
+          tryKeyIndex(kIndex + 1);
         }
       });
     };
 
-    tryNextKey(0);
+    tryKeyIndex(0);
   });
 }
 

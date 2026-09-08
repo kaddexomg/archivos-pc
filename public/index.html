@@ -12,8 +12,8 @@
     <div class="header-left">
       <div class="brand-badge">JJ</div>
       <div>
-        <h1 class="brand-title">JJ PAPER <span>· Intelligence Suite</span></h1>
-        <p class="brand-subtitle">MixNet FoxPro ⇄ Red Multiagente Gemini AI (7 Especialistas)</p>
+        <h1 class="brand-title">JJ PAPER <span>· Intelligence Suite v6.1</span></h1>
+        <p class="brand-subtitle">MixNet FoxPro ⇄ Red Multiagente Gemini AI (7 Especialistas con Cascada)</p>
       </div>
     </div>
     <div class="header-right">
@@ -32,6 +32,7 @@
     <button class="nav-tab" data-tab="tab-products">🏷️ Catálogo & Precios</button>
     <button class="nav-tab" data-tab="tab-clients">👥 Radar de Clientes</button>
     <button class="nav-tab" data-tab="tab-sales">🧾 Facturación & Ventas</button>
+    <button class="nav-tab code-tab" data-tab="tab-code">💻 Código & Explorador MixNet</button>
     <button class="nav-tab ai-tab" data-tab="tab-ai">🤖 Agentes IA (7)</button>
   </nav>
 
@@ -65,7 +66,7 @@
             <span class="kpi-value" id="kpi-sales">--</span>
             <span class="kpi-label">Ventas Recientes</span>
           </div>
-          <div class="kpi-sub">Registradas en Albaranes</div>
+          <div class="kpi-sub" id="kpi-max-date">Última fecha de operación: --</div>
         </div>
 
         <div class="kpi-card">
@@ -74,17 +75,20 @@
             <span class="kpi-value" id="kpi-agents">7</span>
             <span class="kpi-label">Agentes Gemini Activos</span>
           </div>
-          <div class="kpi-sub">Balanceo y cuota 100% lista</div>
+          <div class="kpi-sub">Cascada multi-modelo y multi-llave</div>
         </div>
       </div>
 
       <!-- BANNER DE AUDITORIA RAPIDA -->
       <div class="card audit-banner">
         <div>
-          <h3>Equipo de 7 Agentes IA Listo para Auditar</h3>
-          <p>Los especialistas analizan precios oficiales, productos sin rotación, clientes dormidos y redactan ofertas de WhatsApp con datos reales de MixNet.</p>
+          <h3>Equipo de 7 Agentes IA con Acceso a Archivos y Código</h3>
+          <p>Los agentes pueden auditar precios reales en caja, identificar stock detenido, inspeccionar el código fuente .PRG de MixNet y redactar promociones de WhatsApp.</p>
         </div>
-        <button class="btn btn-primary" onclick="switchTab('tab-ai')">Abrir Chat con Agentes →</button>
+        <div class="banner-buttons">
+          <button class="btn btn-primary" onclick="switchTab('tab-ai')">Abrir Chat con Agentes →</button>
+          <button class="btn btn-secondary" onclick="switchTab('tab-code')">Explorar Código MixNet 💻</button>
+        </div>
       </div>
 
       <!-- MUESTRA DE DESTACADOS -->
@@ -116,7 +120,10 @@
         <div class="filter-group">
           <button class="btn-filter active" data-filter="all">Todos</button>
           <button class="btn-filter" data-filter="stock">En Stock (>0)</button>
-          <button class="btn-filter" data-filter="agotado">Agotados Vigentes (=0)</button>
+          <button class="btn-filter" data-filter="agotado">Agotados Vigentes</button>
+          <button class="btn-filter" data-filter="recientes">✨ Modificados Recientes</button>
+          <button class="btn-filter" data-rotacion="ALTA_ROTACION">🔥 Alta Rotación</button>
+          <button class="btn-filter" data-rotacion="BAJA_ROTACION_FRIO">❄️ Stock Frío</button>
         </div>
       </div>
 
@@ -132,13 +139,15 @@
                 <th>Precio Bs</th>
                 <th>Stock</th>
                 <th>Estado</th>
+                <th>Rotación</th>
+                <th>Días sin Mov.</th>
                 <th>Costo USD</th>
                 <th>Margen %</th>
                 <th>Últ. Movimiento</th>
               </tr>
             </thead>
             <tbody id="tbody-products">
-              <tr><td colspan="10" class="text-center">Cargando inventario...</td></tr>
+              <tr><td colspan="12" class="text-center">Cargando inventario...</td></tr>
             </tbody>
           </table>
         </div>
@@ -210,7 +219,50 @@
       </div>
     </section>
 
-    <!-- 5. TAB MULTIAGENTE IA (GEMINI) -->
+    <!-- 5. TAB CODIGO Y EXPLORADOR DE ARCHIVOS MIXNET -->
+    <section id="tab-code" class="tab-pane">
+      <div class="card toolbar-explorer">
+        <div class="explorer-input-group">
+          <label>Carpeta a escanear:</label>
+          <input type="text" id="explorer-path" value="M:\comp01">
+          <button id="btn-scan-dir" class="btn btn-primary btn-sm">🔍 Escanear Archivos</button>
+        </div>
+        <div class="quick-dirs">
+          <button class="chip" onclick="setExplorerDir('M:\\comp01')">M:\comp01 (Empresa Activa)</button>
+          <button class="chip" onclick="setExplorerDir('M:\\DLL-Pre\\DLL\\PRG')">M:\DLL-Pre\DLL\PRG (Código FoxPro)</button>
+          <button class="chip" onclick="setExplorerDir('M:\\ejercicios')">M:\ejercicios</button>
+          <button class="chip" onclick="setExplorerDir('M:\\')">M:\ (Servidor Raíz)</button>
+        </div>
+      </div>
+
+      <div class="explorer-layout">
+        <!-- LISTA DE ARCHIVOS -->
+        <div class="card file-tree-card">
+          <div class="card-header">
+            <h3>Archivos Encontrados</h3>
+            <span class="badge" id="file-count">0 archivos</span>
+          </div>
+          <div id="file-list" class="file-list-container">
+            <p class="text-muted small">Haz clic en Escanear Archivos para listar las carpetas...</p>
+          </div>
+        </div>
+
+        <!-- VISOR Y ANALIZADOR IA -->
+        <div class="card file-viewer-card">
+          <div class="card-header">
+            <h3 id="current-file-name">Ningún archivo seleccionado</h3>
+            <button id="btn-analyze-code" class="btn btn-secondary btn-sm" style="display:none;" onclick="analyzeCurrentFile()">
+              🤖 Analizar Lógica con IA (Agente 7)
+            </button>
+          </div>
+          <div id="file-viewer-content" class="code-viewer-container">
+            <p class="text-muted">Selecciona un archivo .PRG, .INI, .TXT o .DBF de la lista para ver su código fuente o estructura.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 6. TAB MULTIAGENTE IA (GEMINI) -->
     <section id="tab-ai" class="tab-pane">
       <div class="ai-layout">
         <!-- BARRA LATERAL DE AGENTES -->
@@ -229,19 +281,22 @@
               <h3 id="current-agent-title">Orquestador y Supervisor General</h3>
               <p id="current-agent-desc" class="text-muted small">Coordinación ejecutiva de inventario, ventas y precios de MixNet.</p>
             </div>
-            <div class="key-badge" id="current-key-badge">Llave 1 (Gemini 3.6 Flash)</div>
+            <div class="key-badge" id="current-key-badge">Llave 1 (Cascada Activa)</div>
           </div>
 
           <!-- CHIPS RAPIDOS -->
           <div class="quick-chips">
-            <button class="chip" onclick="askQuick('¿Cuáles son los 10 productos que más se están vendiendo y cuál es su stock actual?')">
-              ⚡ Top 10 más vendidos y stock
+            <button class="chip" onclick="askQuick('¿Cuáles son los productos con mayor rotación reciente y cuáles están fríos sin ventas?')">
+              ⚡ Analizar rotación y stock frío
             </button>
             <button class="chip" onclick="askQuick('Audita los productos que tienen costo mayor al precio de venta o margen menor al 15%.')">
               💰 Auditar márgenes bajos
             </button>
-            <button class="chip" onclick="askQuick('¿Qué productos tienen más de 6 meses sin venderse para hacer una promoción de liquidación?')">
-              📦 Detectar stock frío / muerto
+            <button class="chip" onclick="askQuick('¿Qué productos fueron modificados o agregados recientemente en MixNet?')">
+              ✨ Detectar novedades y cambios recientes
+            </button>
+            <button class="chip" onclick="askQuick('Explica cómo lee MixNet las tablas VICTAINV, MXRENFAC y cómo calcula el Precio B.')">
+              💻 Explicar lógica interna de MixNet
             </button>
             <button class="chip" onclick="askQuick('Redáctame un mensaje atractivo de WhatsApp para ofrecerle a los colegios listas escolares.')">
               📢 Mensaje WhatsApp para Colegios
@@ -254,7 +309,7 @@
               <div class="msg-avatar">🤖</div>
               <div class="msg-body">
                 <strong>¡Hola! Soy el Orquestador General de JJ Paper.</strong>
-                <p>Tengo acceso a la base de datos viva de MixNet (productos, existencias físicas, precios cliente en USD, cartera de clientes y facturación). Puedes hacerme preguntas en lenguaje cotidiano o elegir a cualquiera de los 7 especialistas en el panel izquierdo.</p>
+                <p>El sistema cuenta con un equipo de 7 agentes especialistas impulsados por Google Gemini con tolerancia a fallos. Puedo analizar productos, clientes, facturas y explorar el código fuente .PRG de MixNet. ¿Qué analizamos hoy?</p>
               </div>
             </div>
           </div>

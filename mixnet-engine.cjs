@@ -1,8 +1,10 @@
 /*
   ========================================================================
-  JJ PAPER -- MOTOR DE DATOS TRANSACCIONALES E HISTORICOS MIXNET
+  JJ PAPER -- MOTOR DE DATOS TRANSACCIONALES E HISTORICOS MIXNET v6.1
   ========================================================================
-  Lee tablas maestras y transaccionales (VICTAINV, MXCTACLI, ALB, MXRENFAC, MXTRAINV).
+  - Deteccion DINAMICA del horizonte temporal (sin fechas fijas cableadas).
+  - Calculo de velocidad de rotacion y dias sin movimiento.
+  - Explorador y Lector de Archivos (.PRG, .INI, .TXT, .DBF) para los Agentes.
   100% compatible con Node 13 (Windows 7) - Cero dependencias npm externas.
 */
 'use strict';
@@ -178,11 +180,28 @@ function locateLiveStoreCompany() {
   return { dir: bestDir, lastTx: latestTxDate };
 }
 
+/* ═══════════════ AYUDANTES DE FECHAS DINAMICAS ═══════════════ */
+function parseFoxDate(str) {
+  if (!str || str.length < 8) return null;
+  var y = parseInt(str.substring(0, 4), 10);
+  var m = parseInt(str.substring(4, 6), 10) - 1;
+  var d = parseInt(str.substring(6, 8), 10);
+  if (isNaN(y) || isNaN(m) || isNaN(d) || y < 1990 || y > 2050) return null;
+  return new Date(y, m, d);
+}
+
+function fmtDate(s) {
+  if (!s || s.length < 8) return '';
+  return s.substring(0, 4) + '-' + s.substring(4, 6) + '-' + s.substring(6, 8);
+}
+
 /* ═══════════════ CACHE Y BASE DE DATOS EN MEMORIA ═══════════════ */
 var databaseState = {
   initialized: false,
   lastScan: null,
   liveDir: null,
+  maxSystemDate: '',
+  maxSystemDateFmt: '',
   products: [],
   productsByCode: {},
   clients: [],
@@ -192,12 +211,7 @@ var databaseState = {
   summary: {}
 };
 
-function fmtDate(s) {
-  if (!s || s.length < 8) return '';
-  return s.substring(0, 4) + '-' + s.substring(4, 6) + '-' + s.substring(6, 8);
-}
-
-// Escaneo y carga de productos
+// Escaneo y carga DINAMICA de productos
 function loadProducts(liveDir) {
   var targetTable = null;
   var candidateTables = ['VICTAINV.DBF', 'MXCTAINV.DBF', 'CTAINV.DBF'];
@@ -205,10 +219,10 @@ function loadProducts(liveDir) {
     var p = path.join(liveDir, candidateTables[ci]);
     if (fs.existsSync(p)) { targetTable = p; break; }
   }
-  if (!targetTable) return [];
+  if (!targetTable) return { list: [], byCode: {}, maxDate: '' };
 
   var struct = readDbfStructure(targetTable);
-  if (!struct) return [];
+  if (!struct) return { list: [], byCode: {}, maxDate: '' };
 
   var rows = readDbfRows(struct, 500000);
   var fn = struct.fieldNames;
@@ -228,47 +242,95 @@ function loadProducts(liveDir) {
   var fFSal   = findField(fn, ['fecha_sal', 'fec_sal', 'fechasal']);
   var fFCos   = findField(fn, ['fecha_cos', 'fec_cos', 'fechacos']);
   var fFMod   = findField(fn, ['fecha_mod', 'fec_mod', 'fechamod']);
+  var fFCrea  = findField(fn, ['fecha_crea', 'fec_crea', 'fechacrea']);
+
+  // PASO 1: Descubrir DINAMICAMENTE la fecha mas reciente del sistema (maxSystemDate)
+  var highestDate = '';
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i];
+    var ds = [
+      String(r[fFSal] || '').trim().replace(/[^0-9]/g, ''),
+      String(r[fFMod] || '').trim().replace(/[^0-9]/g, ''),
+      String(r[fFCos] || '').trim().replace(/[^0-9]/g, ''),
+      String(r[fFCrea] || '').trim().replace(/[^0-9]/g, '')
+    ];
+    for (var di = 0; di < ds.length; di++) {
+      var dStr = ds[di];
+      if (dStr.length === 8 && dStr > highestDate && dStr < '20300000') {
+        highestDate = dStr;
+      }
+    }
+  }
+
+  var maxDateObj = parseFoxDate(highestDate) || new Date();
 
   var list = [];
   var byCode = {};
 
+  // PASO 2: Filtrado y calculo de rotacion relativo a maxSystemDate
   for (var ri = 0; ri < rows.length; ri++) {
-    var r = rows[ri];
-    var cod = String(r[fCode] || '').trim().toUpperCase();
+    var row = rows[ri];
+    var cod = String(row[fCode] || '').trim().toUpperCase();
     if (!cod) continue;
 
-    var nom = String(r[fName] || '').trim();
+    var nom = String(row[fName] || '').trim();
     if (!nom) nom = '(SIN NOMBRE)';
 
     // Filtros de estatus y marcas de borrado
-    var stVal = String(r[fStatus] || '').trim();
+    var stVal = String(row[fStatus] || '').trim();
     if (stVal === '1') continue;
     if (/^(\*{2,}|NO USAR|ELIMINADO|ANULADO|DESCONTINUADO|OBSOLETO|PRUEBA)/i.test(nom)) continue;
 
-    var pB = parseFloat(String(r[fPB] || '0').replace(/,/g, '.')) || 0;
-    var pA = parseFloat(String(r[fPA] || '0').replace(/,/g, '.')) || 0;
-    var pC = parseFloat(String(r[fPC] || '0').replace(/,/g, '.')) || 0;
-    var cost = parseFloat(String(r[fCost] || '0').replace(/,/g, '.')) || 0;
-    var stock = parseFloat(String(r[fStock] || '0').replace(/,/g, '.')) || 0;
+    var pB = parseFloat(String(row[fPB] || '0').replace(/,/g, '.')) || 0;
+    var pA = parseFloat(String(row[fPA] || '0').replace(/,/g, '.')) || 0;
+    var pC = parseFloat(String(row[fPC] || '0').replace(/,/g, '.')) || 0;
+    var cost = parseFloat(String(row[fCost] || '0').replace(/,/g, '.')) || 0;
+    var stock = parseFloat(String(row[fStock] || '0').replace(/,/g, '.')) || 0;
 
     var precioCliente = pB > 0 ? pB : pA;
     var precioMayor   = pA > 0 ? pA : pB;
     if (precioCliente <= 0) continue;
 
-    var dSal  = String(r[fFSal] || '').trim().replace(/[^0-9]/g, '');
-    var dMod  = String(r[fFMod] || '').trim().replace(/[^0-9]/g, '');
-    var dCos  = String(r[fFCos] || '').trim().replace(/[^0-9]/g, '');
+    var dSal  = String(row[fFSal] || '').trim().replace(/[^0-9]/g, '');
+    var dMod  = String(row[fFMod] || '').trim().replace(/[^0-9]/g, '');
+    var dCos  = String(row[fFCos] || '').trim().replace(/[^0-9]/g, '');
+    var dCrea = String(row[fFCrea] || '').trim().replace(/[^0-9]/g, '');
 
     var lastActivity = '';
     if (dSal > lastActivity) lastActivity = dSal;
     if (dMod > lastActivity) lastActivity = dMod;
     if (dCos > lastActivity) lastActivity = dCos;
+    if (dCrea > lastActivity && !lastActivity) lastActivity = dCrea;
+
+    var lastDateObj = parseFoxDate(lastActivity);
+    var daysSince = lastDateObj ? Math.round((maxDateObj - lastDateObj) / (1000 * 60 * 60 * 24)) : 9999;
+    if (daysSince < 0) daysSince = 0;
 
     var hasStock = stock > 0;
-    var hasRecent = (lastActivity && lastActivity >= '20240101');
-    if (!hasStock && !hasRecent) continue;
+    // Criterio DINAMICO:
+    // Si tiene stock > 0: Esta en tienda hoy 100%.
+    // Si stock = 0: Solo pasa si tuvo actividad comercial en la ventana dinamica de los ultimos 365 dias
+    // relativos a la fecha de maxima operacion de la empresa (evita filtrar anualmente con anos fijos).
+    var isRecentDynamic = (daysSince <= 365);
 
-    // Calcular margen bruto estimado %
+    if (!hasStock && !isRecentDynamic) continue;
+
+    // Clasificacion de Rotacion
+    var estadoRotacion = 'ROTACION_MEDIA';
+    if (hasStock) {
+      if (daysSince <= 60) estadoRotacion = 'ALTA_ROTACION';
+      else if (daysSince <= 180) estadoRotacion = 'ROTACION_MEDIA';
+      else if (daysSince <= 365) estadoRotacion = 'BAJA_ROTACION_FRIO';
+      else estadoRotacion = 'STOCK_INMOVILIZADO';
+    } else {
+      estadoRotacion = 'AGOTADO_VIGENTE';
+    }
+
+    // Flag si fue creado o modificado recientemente (ultimos 60 dias del sistema)
+    var modDateObj = parseFoxDate(dMod || dCrea);
+    var isRecentUpdate = modDateObj ? Math.round((maxDateObj - modDateObj) / (1000 * 60 * 60 * 24)) <= 60 : false;
+
+    // Margen Bruto estimado %
     var marginPct = 0;
     if (precioCliente > 0 && cost > 0) {
       marginPct = Math.round(((precioCliente - cost) / precioCliente) * 100);
@@ -282,12 +344,15 @@ function loadProducts(liveDir) {
       precio_bs: pC,
       stock_actual: stock > 0 ? stock : 0,
       estado_stock: hasStock ? 'EN_STOCK' : 'AGOTADO_VIGENTE',
+      estado_rotacion: estadoRotacion,
+      es_reciente_o_modificado: isRecentUpdate,
       costo_usd: cost,
       margen_porcentaje: marginPct,
-      categoria: String(r[fGroup] || '').trim(),
-      marca: String(r[fBrand] || '').trim(),
-      empaque: String(r[fUnit] || '').trim(),
-      proveedor: String(r[fProv] || '').trim(),
+      dias_sin_movimiento: daysSince,
+      categoria: String(row[fGroup] || '').trim(),
+      marca: String(row[fBrand] || '').trim(),
+      empaque: String(row[fUnit] || '').trim(),
+      proveedor: String(row[fProv] || '').trim(),
       ultimo_movimiento: lastActivity,
       ultimo_movimiento_fmt: fmtDate(lastActivity)
     };
@@ -299,7 +364,7 @@ function loadProducts(liveDir) {
   }
 
   list.sort(function(a, b) { return a.descripcion.localeCompare(b.descripcion); });
-  return { list: list, byCode: byCode };
+  return { list: list, byCode: byCode, maxDate: highestDate };
 }
 
 // Escaneo y carga de clientes
@@ -387,12 +452,11 @@ function loadClients(liveDir) {
   return { list: list, byCode: byCode, byRif: byRif };
 }
 
-// Escaneo de facturacion y despachos recientes (carpetas EJxxx / ALB / MXRENFAC)
+// Escaneo de facturacion y despachos recientes
 function loadRecentSales(liveDir) {
   var sales = [];
   var parentDir = path.dirname(liveDir);
 
-  // Buscar carpetas de ejercicios recientes (EJ007, EJ008, EJ010, EJ011)
   var ejDirs = [];
   var searchDirs = [liveDir, parentDir, 'M:\\ejercicios', 'M:\\comp01'];
   for (var si = 0; si < searchDirs.length; si++) {
@@ -410,7 +474,6 @@ function loadRecentSales(liveDir) {
     } catch (_) {}
   }
 
-  // Ordenar ejercicios descendentes (los mas nuevos primero)
   ejDirs.sort().reverse();
 
   for (var di = 0; di < ejDirs.length; di++) {
@@ -421,7 +484,7 @@ function loadRecentSales(liveDir) {
     if (fs.existsSync(albPath)) {
       var struct = readDbfStructure(albPath);
       if (struct && struct.numRecords > 0) {
-        var rows = readDbfRows(struct, 5000); // ultimos registros
+        var rows = readDbfRows(struct, 5000);
         var fn = struct.fieldNames;
         var fDoc   = findField(fn, ['numalb', 'numfac', 'documento']);
         var fFec   = findField(fn, ['emision', 'fecha']);
@@ -457,7 +520,99 @@ function loadRecentSales(liveDir) {
   return sales;
 }
 
-// Inicializar y refrescar base de datos completa
+/* ═══════════════ EXPLORADOR Y ACCIONES EN EL SISTEMA DE ARCHIVOS ═══════════════ */
+function scanDirectory(basePath, filterExtensions, maxDepth) {
+  var depth = typeof maxDepth === 'number' ? maxDepth : 2;
+  var targetExts = filterExtensions && filterExtensions.length > 0
+    ? filterExtensions.map(function(e) { return e.toLowerCase(); })
+    : null;
+
+  var results = [];
+
+  function walk(currentDir, currentDepth) {
+    if (currentDepth > depth) return;
+    try {
+      var entries = fs.readdirSync(currentDir);
+      for (var i = 0; i < entries.length; i++) {
+        var entryName = entries[i];
+        var fullPath = path.join(currentDir, entryName);
+        try {
+          var stat = fs.statSync(fullPath);
+          if (stat.isDirectory()) {
+            if (!/^\./.test(entryName) && entryName !== 'node_modules') {
+              results.push({
+                type: 'dir',
+                name: entryName,
+                path: fullPath,
+                mtime: stat.mtime
+              });
+              walk(fullPath, currentDepth + 1);
+            }
+          } else if (stat.isFile()) {
+            var ext = path.extname(entryName).toLowerCase().replace(/^\./, '');
+            if (!targetExts || targetExts.indexOf(ext) !== -1) {
+              results.push({
+                type: 'file',
+                name: entryName,
+                path: fullPath,
+                ext: ext,
+                sizeBytes: stat.size,
+                mtime: stat.mtime
+              });
+            }
+          }
+        } catch (_) {}
+      }
+    } catch (_) {}
+  }
+
+  walk(basePath, 1);
+  return results;
+}
+
+// Lectura de archivo (sea texto, codigo PRG, INI, o DBF estructurado)
+function readFileContent(targetPath, maxLines) {
+  var limit = maxLines || 300;
+  if (!fs.existsSync(targetPath)) {
+    return { success: false, error: 'El archivo no existe: ' + targetPath };
+  }
+
+  var ext = path.extname(targetPath).toLowerCase();
+
+  // Si es tabla DBF: leer esquema y primeras filas
+  if (ext === '.dbf') {
+    var struct = readDbfStructure(targetPath);
+    if (!struct) return { success: false, error: 'No se pudo leer cabecera DBF' };
+    var rows = readDbfRows(struct, limit);
+    return {
+      success: true,
+      type: 'dbf',
+      fileName: path.basename(targetPath),
+      numRecords: struct.numRecords,
+      fields: struct.fields,
+      sampleRows: rows
+    };
+  }
+
+  // Si es archivo de texto / codigo / ini / bat / prg
+  try {
+    var rawBuf = fs.readFileSync(targetPath);
+    var contentStr = decodeStr(rawBuf, 0, Math.min(rawBuf.length, 500000));
+    var lines = contentStr.split(/\r?\n/);
+    return {
+      success: true,
+      type: 'text',
+      fileName: path.basename(targetPath),
+      totalLines: lines.length,
+      lines: lines.slice(0, limit),
+      truncated: lines.length > limit
+    };
+  } catch (err) {
+    return { success: false, error: 'Error leyendo archivo: ' + err.message };
+  }
+}
+
+// Inicializar base de datos completa
 function initializeDatabase() {
   var live = locateLiveStoreCompany();
   if (!live.dir) {
@@ -470,6 +625,8 @@ function initializeDatabase() {
   var pData = loadProducts(live.dir);
   databaseState.products = pData.list;
   databaseState.productsByCode = pData.byCode;
+  databaseState.maxSystemDate = pData.maxDate;
+  databaseState.maxSystemDateFmt = fmtDate(pData.maxDate);
 
   var cData = loadClients(live.dir);
   databaseState.clients = cData.list;
@@ -482,11 +639,14 @@ function initializeDatabase() {
   var agotados = databaseState.products.filter(function(p) { return p.stock_actual <= 0; }).length;
   var conCelular = databaseState.clients.filter(function(c) { return c.telefono_movil_whatsapp; }).length;
   var conEmail = databaseState.clients.filter(function(c) { return c.email; }).length;
+  var novedades = databaseState.products.filter(function(p) { return p.es_reciente_o_modificado; }).length;
 
   databaseState.summary = {
     total_productos: databaseState.products.length,
     productos_en_stock: enStock,
     productos_agotados_vigentes: agotados,
+    productos_modificados_recientes: novedades,
+    fecha_maxima_sistema: databaseState.maxSystemDateFmt,
     total_clientes: databaseState.clients.length,
     clientes_con_whatsapp: conCelular,
     clientes_con_email: conEmail,
@@ -502,5 +662,7 @@ function initializeDatabase() {
 module.exports = {
   initializeDatabase: initializeDatabase,
   getState: function() { return databaseState; },
-  locateLiveStoreCompany: locateLiveStoreCompany
+  locateLiveStoreCompany: locateLiveStoreCompany,
+  scanDirectory: scanDirectory,
+  readFileContent: readFileContent
 };
