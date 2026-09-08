@@ -288,137 +288,145 @@ function locateLiveStoreCompany() {
 function extractActiveProducts(liveDir) {
   log('Auditando y extrayendo catalogo de productos en ' + liveDir + '...');
 
-  // Tablas que contienen definiciones de articulos en la empresa
-  var tableNames = [
-    'VICTAINV.DBF',
-    'MXCTAINV.DBF',
-    'CTAEVA.DBF',
-    'JJCTAINV.DBF'
-  ];
+  // 1. PRIORIDAD: VICTAINV.DBF es la vista viva maestra de la tienda en MixNet.
+  // Solo si no existe, usamos MXCTAINV.DBF o CTAINV.DBF como alternativa.
+  // IMPORTANTE: NO mezclar múltiples tablas secundarias/respaldos para no revivir artículos eliminados.
+  var targetTable = null;
+  var candidateTables = ['VICTAINV.DBF', 'MXCTAINV.DBF', 'CTAINV.DBF'];
+  for (var ci = 0; ci < candidateTables.length; ci++) {
+    var p = path.join(liveDir, candidateTables[ci]);
+    if (fs.existsSync(p)) {
+      targetTable = p;
+      break;
+    }
+  }
+
+  if (!targetTable) {
+    logWarn('No se encontro ninguna tabla de inventario en ' + liveDir);
+    return { products: [], totalRaw: 0, inactive: 0, obsolete: 0 };
+  }
+
+  var struct = readDbfStructure(targetTable);
+  if (!struct || struct.numRecords <= 0) {
+    logWarn('La tabla ' + targetTable + ' no tiene registros.');
+    return { products: [], totalRaw: 0, inactive: 0, obsolete: 0 };
+  }
+
+  log('  -> Usando tabla viva de articulos: ' + struct.fileName + ' (' + struct.numRecords + ' registros totales)');
+  var rows = readDbfRows(struct, 500000);
+  var fn = struct.fieldNames;
+
+  var fCode   = findField(fn, ['codart', 'codigo', 'cod_art', 'id']);
+  var fName   = findField(fn, ['nomart', 'nombre', 'descrip', 'articulo']);
+  var fPA     = findField(fn, ['precio_a', 'p1', 'precio1']);
+  var fPB     = findField(fn, ['precio_b', 'p2', 'precio2']);
+  var fPC     = findField(fn, ['precio_c', 'p3', 'precio3']);
+  var fCost   = findField(fn, ['costo_act', 'costo', 'ult_costo', 'cost_u']);
+  var fStock  = findField(fn, ['existe_act', 'exist', 'stock', 'cantidad']);
+  var fGroup  = findField(fn, ['grupo', 'familia', 'fam', 'cat']);
+  var fBrand  = findField(fn, ['marca', 'mar']);
+  var fUnit   = findField(fn, ['unidad', 'uni', 'medida']);
+  var fProv   = findField(fn, ['ult_prove', 'proveedor', 'prov_asig']);
+  var fStatus = findField(fn, ['estatus', 'status', 'inactivo']);
+  var fFSal   = findField(fn, ['fecha_sal', 'fec_sal', 'fechasal', 'fec_uven']);
+  var fFCos   = findField(fn, ['fecha_cos', 'fec_cos', 'fechacos', 'fec_ucpa']);
+  var fFMod   = findField(fn, ['fecha_mod', 'fec_mod', 'fechamod']);
+  var fFCrea  = findField(fn, ['fecha_crea', 'fechacrea', 'fec_crea']);
 
   var productsMap = new Map();
-  var totalRawFound = 0;
+  var totalRawFound = rows.length;
   var inactiveCount = 0;
   var obsoleteCount = 0;
 
-  for (var ti = 0; ti < tableNames.length; ti++) {
-    var tPath = path.join(liveDir, tableNames[ti]);
-    if (fs.existsSync(tPath)) {
-      var struct = readDbfStructure(tPath);
-      if (struct && struct.numRecords > 0) {
-        log('  -> Analizando tabla: ' + struct.fileName + ' (' + struct.numRecords + ' registros)');
-        var rows = readDbfRows(struct, 500000);
-        var fn = struct.fieldNames;
+  for (var ri = 0; ri < rows.length; ri++) {
+    var r = rows[ri];
 
-        var fCode   = findField(fn, ['codart', 'codigo', 'cod_art', 'id']);
-        var fName   = findField(fn, ['nomart', 'nombre', 'descrip', 'articulo']);
-        var fPA     = findField(fn, ['precio_a', 'p1', 'precio1']);
-        var fPB     = findField(fn, ['precio_b', 'p2', 'precio2']);
-        var fPC     = findField(fn, ['precio_c', 'p3', 'precio3']);
-        var fCost   = findField(fn, ['costo_act', 'costo', 'ult_costo', 'cost_u']);
-        var fStock  = findField(fn, ['existe_act', 'exist', 'stock', 'cantidad']);
-        var fGroup  = findField(fn, ['grupo', 'familia', 'fam', 'cat']);
-        var fBrand  = findField(fn, ['marca', 'mar']);
-        var fUnit   = findField(fn, ['unidad', 'uni', 'medida']);
-        var fProv   = findField(fn, ['ult_prove', 'proveedor', 'prov_asig']);
-        var fStatus = findField(fn, ['estatus', 'status', 'inactivo']);
-        var fFMod   = findField(fn, ['fecha_mod', 'fec_mod', 'fechamod']);
+    var cod = String(r[fCode] || '').trim().toUpperCase();
+    if (!cod) continue;
 
-        for (var ri = 0; ri < rows.length; ri++) {
-          totalRawFound++;
-          var r = rows[ri];
+    var nom = String(r[fName] || '').trim();
+    if (!nom) nom = '(SIN NOMBRE)';
 
-          var cod = String(r[fCode] || '').trim().toUpperCase();
-          if (!cod) continue;
+    // CRITERIO 1: Estatus de FoxPro (estatus == '1' es DESACTIVADO / DADO DE BAJA)
+    var stVal = String(r[fStatus] || '').trim();
+    if (stVal === '1') {
+      inactiveCount++;
+      continue;
+    }
 
-          var nom = String(r[fName] || '').trim();
-          if (!nom) nom = '(SIN NOMBRE)';
+    // CRITERIO 2: Descartar marcas de borrado o pruebas en el nombre
+    if (/^(\*{2,}|NO USAR|ELIMINADO|ANULADO|DESCONTINUADO|OBSOLETO|PRUEBA)/i.test(nom)) {
+      inactiveCount++;
+      continue;
+    }
 
-          // CRITERIO 1: Estatus de FoxPro (estatus == '1' es DESACTIVADO / INACTIVO)
-          var stVal = String(r[fStatus] || '').trim();
-          if (stVal === '1') {
-            inactiveCount++;
-            continue;
-          }
+    // PRECIOS DE MIXNET:
+    // PRECIO B: Precio venta cliente oficial (USD) -> PRECIO OFICIAL CLIENTE
+    // PRECIO A: Precio mayorista / distribuidor (USD)
+    // PRECIO C: Precio en Bolivares (Bs)
+    var pB = parseFloat(String(r[fPB] || '0').replace(/,/g, '.')) || 0;
+    var pA = parseFloat(String(r[fPA] || '0').replace(/,/g, '.')) || 0;
+    var pC = parseFloat(String(r[fPC] || '0').replace(/,/g, '.')) || 0;
+    var cost = parseFloat(String(r[fCost] || '0').replace(/,/g, '.')) || 0;
+    var stock = parseFloat(String(r[fStock] || '0').replace(/,/g, '.')) || 0;
 
-          // Precios de MixNet
-          // PRECIO B: Precio venta cliente (USD)
-          // PRECIO A: Precio mayorista / distribuidor (USD)
-          // PRECIO C: Precio en Bolivares (Bs)
-          var pB = parseFloat(String(r[fPB] || '0').replace(/,/g, '.')) || 0;
-          var pA = parseFloat(String(r[fPA] || '0').replace(/,/g, '.')) || 0;
-          var pC = parseFloat(String(r[fPC] || '0').replace(/,/g, '.')) || 0;
-          var cost = parseFloat(String(r[fCost] || '0').replace(/,/g, '.')) || 0;
-          var stock = parseFloat(String(r[fStock] || '0').replace(/,/g, '.')) || 0;
+    // Si el precio B esta en 0 pero A tiene valor, usar A como respaldo
+    var precioCliente = pB > 0 ? pB : pA;
+    var precioMayor   = pA > 0 ? pA : pB;
 
-          // Si el precio B esta en cero pero A tiene valor, usar A como respaldo para cliente
-          var precioCliente = pB > 0 ? pB : pA;
-          var precioMayor   = pA > 0 ? pA : pB;
+    // CRITERIO 3: Filtro de precio valido
+    // Si no tiene precio de venta asignado, no puede comercializarse
+    if (precioCliente <= 0) {
+      obsoleteCount++;
+      continue;
+    }
 
-          var fMod = String(r[fFMod] || '').trim();
+    // Fechas de actividad comercial en FoxPro
+    var dSal  = String(r[fFSal] || '').trim().replace(/[^0-9]/g, '');
+    var dMod  = String(r[fFMod] || '').trim().replace(/[^0-9]/g, '');
+    var dCos  = String(r[fFCos] || '').trim().replace(/[^0-9]/g, '');
+    var dCrea = String(r[fFCrea] || '').trim().replace(/[^0-9]/g, '');
 
-          // CRITERIO 2: Filtro de activos reales:
-          // Un producto activo hoy en dia DEBE tener precio de venta > 0, o existencia > 0 en tienda.
-          // Si tiene precio 0 Y stock 0, es un articulo obsoleto/eliminado que no se vende.
-          if (precioCliente <= 0 && stock <= 0) {
-            obsoleteCount++;
-            continue;
-          }
+    var lastActivity = '';
+    if (dSal > lastActivity) lastActivity = dSal;
+    if (dMod > lastActivity) lastActivity = dMod;
+    if (dCos > lastActivity) lastActivity = dCos;
+    if (dCrea > lastActivity && !lastActivity) lastActivity = dCrea;
 
-          // Descartar articulos con marcas de borrado en el nombre
-          if (/^(\*{3,}|NO USAR|ELIMINADO|ANULADO)/i.test(nom)) {
-            inactiveCount++;
-            continue;
-          }
+    // CRITERIO 4: VIGENCIA Y EXISTENCIA FISICA (EL CRITERIO CRUCIAL DEL CATALOGO ACTIVO)
+    // 1) Si tiene stock fisico (stock > 0): ES ACTIVO 100% (mercancia en tienda para venta inmediata).
+    // 2) Si stock es 0: SOLO se considera activo si tuvo venta, compra o cambio de precio reciente (2024 en adelante).
+    //    Articulos con stock 0 cuya ultima venta/movimiento fue en 2023 o antes (o vacia): SON OBSOLETOS / HISTORICOS.
+    var hasPhysicalStock = stock > 0;
+    var hasRecentActivity = (lastActivity && lastActivity >= '20240101');
 
-          var prodObj = {
-            codigo: cod,
-            descripcion: nom,
-            precio_cliente_usd: precioCliente,
-            precio_mayor_usd: precioMayor,
-            precio_bs: pC,
-            stock_actual: stock > 0 ? stock : 0,
-            costo_usd: cost,
-            estatus: 'ACTIVO',
-            categoria: String(r[fGroup] || '').trim(),
-            marca: String(r[fBrand] || '').trim(),
-            empaque: String(r[fUnit] || '').trim(),
-            proveedor: String(r[fProv] || '').trim(),
-            fecha_mod: fMod,
-            tabla_fuente: struct.fileName
-          };
+    if (!hasPhysicalStock && !hasRecentActivity) {
+      obsoleteCount++;
+      continue;
+    }
 
-          // Fusion inteligente por SKU si ya fue leido en otra tabla
-          if (!productsMap.has(cod)) {
-            productsMap.set(cod, prodObj);
-          } else {
-            var cur = productsMap.get(cod);
+    var estadoStock = hasPhysicalStock ? 'EN_STOCK' : 'AGOTADO_VIGENTE';
 
-            // Si el nuevo registro viene con fecha_mod mas reciente, actualiza los precios
-            if (prodObj.fecha_mod && prodObj.fecha_mod > (cur.fecha_mod || '')) {
-              if (prodObj.precio_cliente_usd > 0) {
-                cur.precio_cliente_usd = prodObj.precio_cliente_usd;
-                cur.precio_mayor_usd   = prodObj.precio_mayor_usd;
-                cur.precio_bs          = prodObj.precio_bs;
-                cur.fecha_mod          = prodObj.fecha_mod;
-                cur.tabla_fuente       = prodObj.tabla_fuente;
-              }
-            }
+    var prodObj = {
+      codigo: cod,
+      descripcion: nom,
+      precio_cliente_usd: precioCliente,
+      precio_mayor_usd: precioMayor,
+      precio_bs: pC,
+      stock_actual: stock > 0 ? stock : 0,
+      estado_stock: estadoStock,
+      costo_usd: cost,
+      estatus: 'ACTIVO',
+      categoria: String(r[fGroup] || '').trim(),
+      marca: String(r[fBrand] || '').trim(),
+      empaque: String(r[fUnit] || '').trim(),
+      proveedor: String(r[fProv] || '').trim(),
+      ultimo_movimiento: lastActivity,
+      tabla_fuente: struct.fileName
+    };
 
-            // Si el anterior tenia stock 0 y este tiene stock real, actualizar
-            if (prodObj.stock_actual > cur.stock_actual) {
-              cur.stock_actual = prodObj.stock_actual;
-            }
-
-            // Completar datos vacios
-            if (!cur.marca && prodObj.marca) cur.marca = prodObj.marca;
-            if (!cur.categoria && prodObj.categoria) cur.categoria = prodObj.categoria;
-            if (!cur.empaque && prodObj.empaque) cur.empaque = prodObj.empaque;
-            if (!cur.proveedor && prodObj.proveedor) cur.proveedor = prodObj.proveedor;
-            if (cur.costo_usd <= 0 && prodObj.costo_usd > 0) cur.costo_usd = prodObj.costo_usd;
-          }
-        }
-      }
+    if (!productsMap.has(cod)) {
+      productsMap.set(cod, prodObj);
     }
   }
 
@@ -661,7 +669,7 @@ function saveOutputs(prefix, csvContent, jsonPayload) {
 
 /* ═══════════════ MOTOR PRINCIPAL ═══════════════ */
 function run() {
-  banner('JJ PAPER -- EXTRACTOR CONSCIENTE Y PRECISO MIXNET v5.1');
+  banner('JJ PAPER -- EXTRACTOR CONSCIENTE Y PRECISO MIXNET v5.2');
 
   // 1. Localizar Servidor Activo
   log('Paso 1: Localizando servidor activo de MixNet...');
@@ -686,10 +694,12 @@ function run() {
   say('');
   say('  ----------------------------------------------------------------------');
   say('  AUDITORIA DE PRODUCTOS EN TIENDA:');
-  say('    * Total registros evaluados en base de datos: ' + prodResult.totalRaw);
-  say('    * Registros inactivos / dados de baja:        ' + prodResult.inactive);
-  say('    * Registros obsoletos (sin precio ni stock):  ' + prodResult.obsolete);
+  say('    * Total registros en base de datos:           ' + prodResult.totalRaw);
+  say('    * Registros descartados (dados de baja):      ' + prodResult.inactive);
+  say('    * Registros obsoletos (sin stock ni ventas):  ' + prodResult.obsolete);
   say('    * PRODUCTOS ACTIVOS Y VIGENTES HOY:           ' + productos.length);
+  say('      -> En stock fisico disponible:              ' + productos.filter(function(p){ return p.stock_actual > 0; }).length);
+  say('      -> Agotados pero vigentes en venta:         ' + productos.filter(function(p){ return p.stock_actual <= 0; }).length);
   say('  ----------------------------------------------------------------------');
 
   // Muestra de validacion visual de 4 productos
@@ -697,11 +707,11 @@ function run() {
   say('  MUESTRA DE PRECIOS EXACTOS (PRECIO B = CLIENTE):');
   productos.slice(0, 4).forEach(function(p) {
     say('  * [' + p.codigo + '] ' + p.descripcion);
-    say('    -> PRECIO CLIENTE (USD): $' + p.precio_cliente_usd.toFixed(2) + ' (Precio B)');
+    say('    -> PRECIO CLIENTE (USD): $' + p.precio_cliente_usd.toFixed(2) + ' (Precio B oficial)');
     say('    -> PRECIO MAYOR (USD):   $' + p.precio_mayor_usd.toFixed(2) + ' (Precio A)');
     say('    -> PRECIO EN BS:         ' + p.precio_bs.toFixed(2) + ' Bs (Precio C)');
-    say('    -> STOCK FISICO ACTUAL:  ' + p.stock_actual + ' unidades');
-    say('    -> TABLA FUENTE:         ' + p.tabla_fuente + (p.fecha_mod ? ' | ' + fmtDate(p.fecha_mod) : ''));
+    say('    -> STOCK FISICO ACTUAL:  ' + p.stock_actual + ' unidades (' + p.estado_stock + ')');
+    say('    -> ULTIMO MOVIMIENTO:    ' + (p.ultimo_movimiento ? fmtDate(p.ultimo_movimiento) : 'N/D'));
     say('');
   });
 
@@ -720,7 +730,7 @@ function run() {
   // 4. Estructurar CSVs Ultra-Clares para Excel
   log('Paso 4: Construyendo archivos limpios para Excel y Supabase...');
 
-  var pHeaders = 'CODIGO,DESCRIPCION,PRECIO_CLIENTE_USD,PRECIO_MAYOR_USD,PRECIO_BS,STOCK_ACTUAL,COSTO_USD,ESTATUS,CATEGORIA,MARCA,EMPAQUE,PROVEEDOR,FECHA_ACTUALIZACION';
+  var pHeaders = 'CODIGO,DESCRIPCION,PRECIO_CLIENTE_USD,PRECIO_MAYOR_USD,PRECIO_BS,STOCK_ACTUAL,ESTADO_INVENTARIO,COSTO_USD,ESTATUS,CATEGORIA,MARCA,EMPAQUE,PROVEEDOR,ULTIMO_MOVIMIENTO';
   var pRows = [pHeaders];
   productos.forEach(function(p) {
     pRows.push([
@@ -730,13 +740,14 @@ function run() {
       p.precio_mayor_usd.toFixed(2),
       p.precio_bs.toFixed(2),
       p.stock_actual.toString(),
+      escCSV(p.estado_stock),
       p.costo_usd.toFixed(2),
       escCSV(p.estatus),
       escCSV(p.categoria),
       escCSV(p.marca),
       escCSV(p.empaque),
       escCSV(p.proveedor),
-      escCSV(fmtDate(p.fecha_mod))
+      escCSV(fmtDate(p.ultimo_movimiento))
     ].join(','));
   });
 

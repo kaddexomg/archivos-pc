@@ -1,20 +1,25 @@
 ========================================================================
-   JJ PAPER -- EXTRACTOR INTELIGENTE MIXNET v5.1 (WINDOWS 7)
+   JJ PAPER -- EXTRACTOR INTELIGENTE MIXNET v5.2 (WINDOWS 7)
 ========================================================================
 
-Esta version v5.1 implementa la logica real de precios y catalogo activo:
+Esta version v5.2 implementa la depuracion estricta de catalogo y precios:
 
-  1. PRECIO REAL DEL CLIENTE (PRECIO B):
-     - PRECIO_CLIENTE_USD: Toma el Precio B de MixNet (precio real de venta).
+  1. PRECIO OFICIAL DEL CLIENTE (PRECIO B):
+     - PRECIO_CLIENTE_USD: Toma directamente el Precio B de MixNet
+       (el precio PVP exacto que ve la vendedora en mostrador).
      - PRECIO_MAYOR_USD:   Precio A (precio mayorista/distribuidor).
-     - PRECIO_BS:          Precio C (precio en Bolivares).
-     - STOCK_ACTUAL:       Existencia fisica real en inventario.
-     - COSTO_USD:          Costo actual de reposicion.
+     - PRECIO_BS:          Precio C (precio en Bolivares al cambio oficial).
+     - STOCK_ACTUAL:       Existencia fisica real en tienda/almacen.
+     - COSTO_USD:          Costo de compra/reposicion en USD.
 
-  2. FILTRADO ESTRICTO DE PRODUCTOS ACTIVOS (LO QUE SE USA HOY):
-     - Descarta articulos inactivos (estatus = '1' en FoxPro).
-     - Descarta productos obsoletos sin precio y sin stock de anos atras.
-     - Deja unicamente los productos reales y vigentes de la tienda.
+  2. CRITERIO ESTRICTO DE PRODUCTO ACTIVO (DE ~2,900 A LOS ~800 REALES):
+     - Prioriza la tabla viva de la tienda (VICTAINV.DBF) sin duplicar tablas.
+     - Descarta articulos inactivos (estatus = '1' en FoxPro) y nombres con '***'.
+     - EN_STOCK: Productos con existencia fisica en tienda (stock > 0).
+     - AGOTADO_VIGENTE: Productos en 0 que tuvieron movimiento comercial reciente
+       (ventas o reposicion entre 2024 y 2026).
+     - HISTORICOS MUERTOS: Se descartan los mas de 1,200 articulos viejos
+       que tenian stock 0 y no se vendian desde hace 3 a 8 anos.
 
   3. CARTERA DE CLIENTES:
      - Clientes con RIF limpio, direccion y telefonos.
@@ -28,10 +33,10 @@ Esta version v5.1 implementa la logica real de precios y catalogo activo:
 ------------------------------------------------------------------------
 INSTRUCCIONES:
 ------------------------------------------------------------------------
-  1. En la PC de Windows 7, abre la carpeta archivos-pc.
-  2. Haz: git pull origin main
+  1. En la PC de Windows 7, abre la consola o carpeta archivos-pc.
+  2. Ejecuta: git pull origin main
   3. Haz DOBLE CLIC en:
         extraer-todo-mixnet.bat
-  4. Revisa tu Escritorio: tendras los archivos listos para Excel.
+  4. Revisa tu Escritorio: tendras los archivos limpios para Excel.
 
 ========================================================================
