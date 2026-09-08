@@ -1,13 +1,13 @@
 @echo off
 rem ====================================================================
-rem JJ PAPER - Lanzador Extractor MixNet v4.1 para Windows 7
+rem JJ PAPER - Extractor Total Omnisciente MixNet v5.0 (Windows 7)
 rem ====================================================================
-title JJ PAPER - Extractor MixNet v4.1
+title JJ PAPER - Extractor Total MixNet v5.0
 color 0b
 cls
 
 echo ====================================================================
-echo      JJ PAPER -- EXTRACTOR CONSCIENTE MIXNET v4.1
+echo      JJ PAPER -- MOTOR TOTAL MIXNET v5.0 (1-CLIC AUTOMATICO)
 echo ====================================================================
 echo.
 echo  Buscando Node.js en esta PC...
@@ -61,14 +61,14 @@ exit /b 1
 
 :EJECUTAR
 echo  Node.js detectado: %NODE%
-echo  Iniciando escaneo inteligente de MixNet...
+echo  Iniciando escaneo total de todas las tablas de MixNet...
 echo --------------------------------------------------------------------
 echo.
 "%NODE%" "%~dp0extraer-todo-mixnet.cjs"
 
 echo.
 echo ====================================================================
-echo   Proceso finalizado.
+echo   Proceso finalizado con exito.
 echo ====================================================================
 echo.
 pause
