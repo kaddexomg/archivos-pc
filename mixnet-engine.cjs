@@ -969,6 +969,219 @@ function initializeDatabase() {
   };
 }
 
+/* ═══════════════ EXPORTADOR DE ARCHIVOS A CSV ═══════════════ */
+function escCSV(v) {
+  if (v === null || v === undefined) return '';
+  var s = String(v).trim().replace(/\r\n/g, ' ').replace(/\n/g, ' ');
+  if (/[",;\t]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+  return s;
+}
+
+function exportProductsToCSV(filter, rotacion, q) {
+  var pList = databaseState.products || [];
+  if (filter === 'stock') pList = pList.filter(function(p) { return p.stock_actual > 0; });
+  else if (filter === 'agotado') pList = pList.filter(function(p) { return p.stock_actual <= 0; });
+  else if (filter === 'recientes') pList = pList.filter(function(p) { return p.es_reciente_o_modificado; });
+
+  if (rotacion) pList = pList.filter(function(p) { return p.estado_rotacion === rotacion; });
+
+  if (q) {
+    var qLow = q.trim().toLowerCase();
+    pList = pList.filter(function(p) {
+      return p.codigo.toLowerCase().indexOf(qLow) !== -1 ||
+             p.descripcion.toLowerCase().indexOf(qLow) !== -1 ||
+             p.categoria.toLowerCase().indexOf(qLow) !== -1 ||
+             p.marca.toLowerCase().indexOf(qLow) !== -1;
+    });
+  }
+
+  var headers = [
+    'CODIGO', 'DESCRIPCION', 'PRECIO_CLIENTE_USD', 'PRECIO_MAYOR_USD', 'PRECIO_BS',
+    'STOCK_ACTUAL', 'ESTADO_STOCK', 'ESTADO_ROTACION', 'DIAS_SIN_MOVIMIENTO',
+    'COSTO_USD', 'MARGEN_PORCENTAJE', 'CATEGORIA', 'MARCA', 'EMPAQUE',
+    'PROVEEDOR', 'ULTIMO_MOVIMIENTO', 'FECHA_EXTRACCION'
+  ];
+
+  var nowIso = new Date().toISOString();
+  var lines = [headers.join(';')];
+
+  for (var i = 0; i < pList.length; i++) {
+    var p = pList[i];
+    var row = [
+      escCSV(p.codigo),
+      escCSV(p.descripcion),
+      p.precio_cliente_usd.toFixed(2),
+      p.precio_mayor_usd.toFixed(2),
+      p.precio_bs.toFixed(2),
+      p.stock_actual,
+      escCSV(p.estado_stock),
+      escCSV(p.estado_rotacion),
+      p.dias_sin_movimiento,
+      p.costo_usd.toFixed(2),
+      p.margen_porcentaje,
+      escCSV(p.categoria),
+      escCSV(p.marca),
+      escCSV(p.empaque),
+      escCSV(p.proveedor),
+      escCSV(p.ultimo_movimiento_fmt || p.ultimo_movimiento),
+      nowIso
+    ];
+    lines.push(row.join(';'));
+  }
+
+  return '\uFEFF' + lines.join('\r\n');
+}
+
+function exportClientsToCSV(filter, q) {
+  var cList = databaseState.clients || [];
+  if (filter === 'whatsapp') cList = cList.filter(function(c) { return c.telefono_movil_whatsapp; });
+  else if (filter === 'email') cList = cList.filter(function(c) { return c.email; });
+
+  if (q) {
+    var qLow = q.trim().toLowerCase();
+    cList = cList.filter(function(c) {
+      return c.codigo.toLowerCase().indexOf(qLow) !== -1 ||
+             c.razon_social.toLowerCase().indexOf(qLow) !== -1 ||
+             c.rif.toLowerCase().indexOf(qLow) !== -1 ||
+             c.telefono_movil_whatsapp.indexOf(qLow) !== -1;
+    });
+  }
+
+  var headers = [
+    'CODIGO', 'RAZON_SOCIAL', 'RIF', 'TELEFONO_MOVIL_WHATSAPP', 'TELEFONO_FIJO',
+    'EMAIL', 'DIRECCION', 'VENDEDOR', 'SALDO_USD', 'ULTIMO_PAGO', 'FECHA_EXTRACCION'
+  ];
+
+  var nowIso = new Date().toISOString();
+  var lines = [headers.join(';')];
+
+  for (var i = 0; i < cList.length; i++) {
+    var c = cList[i];
+    var row = [
+      escCSV(c.codigo),
+      escCSV(c.razon_social),
+      escCSV(c.rif),
+      escCSV(c.telefono_movil_whatsapp),
+      escCSV(c.telefono_fijo),
+      escCSV(c.email),
+      escCSV(c.direccion),
+      escCSV(c.vendedor),
+      c.saldo.toFixed(2),
+      escCSV(c.ultimo_pago_fmt || c.ultimo_pago),
+      nowIso
+    ];
+    lines.push(row.join(';'));
+  }
+
+  return '\uFEFF' + lines.join('\r\n');
+}
+
+function exportSalesToCSV(q) {
+  var sList = databaseState.recentSales || [];
+  if (q) {
+    var qLow = q.trim().toLowerCase();
+    sList = sList.filter(function(s) {
+      return s.documento.toLowerCase().indexOf(qLow) !== -1 ||
+             s.cliente.toLowerCase().indexOf(qLow) !== -1 ||
+             s.rif.toLowerCase().indexOf(qLow) !== -1 ||
+             s.codigo_cliente.toLowerCase().indexOf(qLow) !== -1;
+    });
+  }
+
+  var headers = [
+    'DOCUMENTO', 'FECHA', 'CODIGO_CLIENTE', 'CLIENTE', 'RIF',
+    'TOTAL_USD', 'VENDEDOR', 'EJERCICIO'
+  ];
+
+  var lines = [headers.join(';')];
+  for (var i = 0; i < sList.length; i++) {
+    var s = sList[i];
+    var row = [
+      escCSV(s.documento),
+      escCSV(s.fecha_fmt || s.fecha),
+      escCSV(s.codigo_cliente),
+      escCSV(s.cliente),
+      escCSV(s.rif),
+      s.total_usd.toFixed(2),
+      escCSV(s.vendedor),
+      escCSV(s.ejercicio)
+    ];
+    lines.push(row.join(';'));
+  }
+
+  return '\uFEFF' + lines.join('\r\n');
+}
+
+function exportDbfToCSV(filePath, maxRows) {
+  if (!fs.existsSync(filePath)) return null;
+  var struct = readDbfStructure(filePath);
+  if (!struct) return null;
+
+  var limit = typeof maxRows === 'number' ? maxRows : 100000;
+  var rows = readDbfRows(struct, limit);
+
+  var headers = [];
+  for (var fi = 0; fi < struct.fields.length; fi++) {
+    headers.push(struct.fields[fi].name.toUpperCase());
+  }
+
+  var lines = [headers.join(';')];
+  for (var ri = 0; ri < rows.length; ri++) {
+    var r = rows[ri];
+    var row = [];
+    for (var f = 0; f < struct.fields.length; f++) {
+      var fname = struct.fields[f].name;
+      row.push(escCSV(r[fname]));
+    }
+    lines.push(row.join(';'));
+  }
+
+  return '\uFEFF' + lines.join('\r\n');
+}
+
+function saveAllExportsToDisk() {
+  var d = new Date();
+  var pad = function(n) { return (n < 10 ? '0' : '') + n; };
+  var stamp = '' + d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + '_' + pad(d.getHours()) + pad(d.getMinutes());
+
+  var targetDirs = [__dirname];
+  var u = process.env.USERPROFILE || '';
+  if (u) {
+    var desk = path.join(u, 'Desktop');
+    var escr = path.join(u, 'Escritorio');
+    if (fs.existsSync(desk) && targetDirs.indexOf(desk) === -1) targetDirs.push(desk);
+    if (fs.existsSync(escr) && targetDirs.indexOf(escr) === -1) targetDirs.push(escr);
+  }
+
+  var prodCsv = exportProductsToCSV();
+  var cliCsv = exportClientsToCSV();
+  var salesCsv = exportSalesToCSV();
+
+  var saved = [];
+  for (var i = 0; i < targetDirs.length; i++) {
+    var tDir = targetDirs[i];
+    try {
+      if (prodCsv) {
+        var pPath = path.join(tDir, 'productos_mixnet_' + stamp + '.csv');
+        fs.writeFileSync(pPath, prodCsv, 'utf8');
+        saved.push(pPath);
+      }
+      if (cliCsv) {
+        var cPath = path.join(tDir, 'clientes_mixnet_' + stamp + '.csv');
+        fs.writeFileSync(cPath, cliCsv, 'utf8');
+        saved.push(cPath);
+      }
+      if (salesCsv) {
+        var sPath = path.join(tDir, 'ventas_mixnet_' + stamp + '.csv');
+        fs.writeFileSync(sPath, salesCsv, 'utf8');
+        saved.push(sPath);
+      }
+    } catch (_) {}
+  }
+
+  return saved;
+}
+
 module.exports = {
   initializeDatabase: initializeDatabase,
   switchDatabaseDirectory: switchDatabaseDirectory,
@@ -977,5 +1190,11 @@ module.exports = {
   findMixnetLocations: findMixnetLocations,
   scanDirectory: scanDirectory,
   searchFiles: searchFiles,
-  readFileContent: readFileContent
+  readFileContent: readFileContent,
+  exportProductsToCSV: exportProductsToCSV,
+  exportClientsToCSV: exportClientsToCSV,
+  exportSalesToCSV: exportSalesToCSV,
+  exportDbfToCSV: exportDbfToCSV,
+  saveAllExportsToDisk: saveAllExportsToDisk
 };
+

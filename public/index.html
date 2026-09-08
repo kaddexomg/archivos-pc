@@ -103,6 +103,7 @@
         <div class="banner-buttons">
           <button class="btn btn-primary" onclick="switchTab('tab-ai')">Abrir Chat con Agentes →</button>
           <button class="btn btn-secondary" onclick="switchTab('tab-code')">Explorar Código MixNet 💻</button>
+          <button class="btn btn-success" onclick="exportAllToDisk()">💾 Guardar CSVs en el PC</button>
         </div>
       </div>
 
@@ -143,6 +144,7 @@
           <button class="btn-filter" data-filter="recientes">✨ Modificados Recientes</button>
           <button class="btn-filter" data-rotacion="ALTA_ROTACION">🔥 Alta Rotación</button>
           <button class="btn-filter" data-rotacion="BAJA_ROTACION_FRIO">❄️ Stock Frío</button>
+          <button id="btn-export-products" class="btn btn-success btn-sm" onclick="exportCurrentProductsCSV()" title="Descargar catálogo en archivo CSV para Excel">📥 Exportar a CSV</button>
         </div>
       </div>
 
@@ -183,6 +185,7 @@
           <button class="btn-filter-cli active" data-filter="all">Todos</button>
           <button class="btn-filter-cli" data-filter="whatsapp">Con WhatsApp</button>
           <button class="btn-filter-cli" data-filter="email">Con Email</button>
+          <button id="btn-export-clients" class="btn btn-success btn-sm" onclick="exportCurrentClientsCSV()" title="Descargar clientes en archivo CSV para Excel">📥 Exportar a CSV</button>
         </div>
       </div>
 
@@ -221,7 +224,10 @@
       <div class="card table-card">
         <div class="card-header">
           <h3>Historial Reciente de Albaranes y Facturación (MixNet)</h3>
-          <span class="badge" id="sales-count">-- ventas</span>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <span class="badge" id="sales-count">-- ventas</span>
+            <button id="btn-export-sales" class="btn btn-success btn-sm" onclick="exportCurrentSalesCSV()" title="Descargar ventas en archivo CSV para Excel">📥 Exportar a CSV</button>
+          </div>
         </div>
         <div class="table-responsive">
           <table class="data-table" id="table-sales">
@@ -306,7 +312,10 @@
         <div class="card file-viewer-card">
           <div class="card-header">
             <h3 id="current-file-name">Ningún archivo seleccionado</h3>
-            <div class="viewer-actions">
+            <div class="viewer-actions" style="display:flex; gap:8px;">
+              <button id="btn-export-table" class="btn btn-success btn-sm" style="display:none;" onclick="exportCurrentTableCSV()">
+                📥 Descargar Tabla en CSV
+              </button>
               <button id="btn-analyze-code" class="btn btn-secondary btn-sm" style="display:none;" onclick="analyzeCurrentFile()">
                 🤖 Analizar Lógica con IA (Agente 7)
               </button>

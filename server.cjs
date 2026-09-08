@@ -39,6 +39,23 @@ function sendJSON(res, statusCode, data) {
   res.end(JSON.stringify(data));
 }
 
+function sendCSV(res, filename, csvContent) {
+  res.writeHead(200, {
+    'Content-Type': 'text/csv; charset=utf-8',
+    'Content-Disposition': 'attachment; filename="' + filename + '"',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type'
+  });
+  res.end(csvContent);
+}
+
+function getDateStamp() {
+  var d = new Date();
+  var pad = function(n) { return (n < 10 ? '0' : '') + n; };
+  return '' + d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + '_' + pad(d.getHours()) + pad(d.getMinutes());
+}
+
 function parseBody(req, callback) {
   var body = '';
   req.on('data', function(chunk) { body += chunk; });
@@ -211,6 +228,57 @@ var server = http.createServer(function(req, res) {
     sendJSON(res, 200, {
       total: sList.length,
       sales: sList.slice(0, slimit)
+    });
+    return;
+  }
+
+  // ─── EXPORTACION DE ARCHIVOS A CSV ───
+
+  // 8.1 Exportar Productos a CSV
+  if (pathname === '/api/export/products') {
+    var prodCsv = engine.exportProductsToCSV(query.filter, query.rotacion, query.q);
+    sendCSV(res, 'productos_mixnet_' + getDateStamp() + '.csv', prodCsv);
+    return;
+  }
+
+  // 8.2 Exportar Clientes a CSV
+  if (pathname === '/api/export/clients') {
+    var cliCsv = engine.exportClientsToCSV(query.filter, query.q);
+    sendCSV(res, 'clientes_mixnet_' + getDateStamp() + '.csv', cliCsv);
+    return;
+  }
+
+  // 8.3 Exportar Ventas a CSV
+  if (pathname === '/api/export/sales') {
+    var salesCsv = engine.exportSalesToCSV(query.q);
+    sendCSV(res, 'ventas_mixnet_' + getDateStamp() + '.csv', salesCsv);
+    return;
+  }
+
+  // 8.4 Exportar cualquier tabla DBF completa a CSV
+  if (pathname === '/api/export/dbf') {
+    var targetDbf = query.path;
+    if (!targetDbf) {
+      sendJSON(res, 400, { error: 'Falta parametro path de la tabla DBF' });
+      return;
+    }
+    var dbfCsv = engine.exportDbfToCSV(targetDbf, parseInt(query.limit, 10) || 100000);
+    if (!dbfCsv) {
+      sendJSON(res, 404, { error: 'No se pudo exportar la tabla DBF especificada' });
+      return;
+    }
+    var baseName = path.basename(targetDbf).replace(/\.[^.]+$/, '');
+    sendCSV(res, baseName + '_' + getDateStamp() + '.csv', dbfCsv);
+    return;
+  }
+
+  // 8.5 Guardar todos los CSVs directamente en el disco del equipo
+  if (pathname === '/api/export/save-to-disk' && req.method === 'POST') {
+    var savedPaths = engine.saveAllExportsToDisk();
+    sendJSON(res, 200, {
+      success: true,
+      totalSaved: savedPaths.length,
+      savedFiles: savedPaths
     });
     return;
   }

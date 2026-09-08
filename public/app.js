@@ -823,7 +823,10 @@ function openFile(filePath) {
         return;
       }
 
+      var btnExportTbl = document.getElementById('btn-export-table');
+
       if (data.type === 'dbf') {
+        if (btnExportTbl) btnExportTbl.style.display = 'inline-block';
         var html = '<div style="margin-bottom:12px; color:#38bdf8;">' +
           '<strong>Tabla FoxPro DBF:</strong> ' + data.numRecords + ' registros totales, ' + data.fields.length + ' campos.' +
         '</div>';
@@ -845,6 +848,8 @@ function openFile(filePath) {
         viewer.innerHTML = html;
         return;
       }
+
+      if (btnExportTbl) btnExportTbl.style.display = 'none';
 
       // Archivo de texto / código FoxPro / INI
       var codeHtml = '';
@@ -1056,3 +1061,71 @@ function renderMarkdown(md) {
   if (inList) html.push('</ul>');
   return html.join('');
 }
+
+// ─── EXPORTACION DE ARCHIVOS A CSV ───
+function triggerDownload(url) {
+  var a = document.createElement('a');
+  a.href = url;
+  a.setAttribute('download', '');
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+function exportCurrentProductsCSV() {
+  var prodSearch = document.getElementById('prod-search');
+  var q = prodSearch ? prodSearch.value.trim() : '';
+  var filterBtn = document.querySelector('.btn-filter.active');
+  var filter = filterBtn ? (filterBtn.getAttribute('data-filter') || 'all') : 'all';
+  var rotacion = filterBtn ? (filterBtn.getAttribute('data-rotacion') || '') : '';
+
+  var url = '/api/export/products?q=' + encodeURIComponent(q) + '&filter=' + filter;
+  if (rotacion) url += '&rotacion=' + encodeURIComponent(rotacion);
+
+  triggerDownload(url);
+}
+
+function exportCurrentClientsCSV() {
+  var cliSearch = document.getElementById('cli-search');
+  var q = cliSearch ? cliSearch.value.trim() : '';
+  var filterBtn = document.querySelector('.btn-filter-cli.active');
+  var filter = filterBtn ? (filterBtn.getAttribute('data-filter') || 'all') : 'all';
+
+  var url = '/api/export/clients?q=' + encodeURIComponent(q) + '&filter=' + filter;
+  triggerDownload(url);
+}
+
+function exportCurrentSalesCSV() {
+  var salesSearch = document.getElementById('sales-search');
+  var q = salesSearch ? salesSearch.value.trim() : '';
+
+  var url = '/api/export/sales?q=' + encodeURIComponent(q);
+  triggerDownload(url);
+}
+
+function exportCurrentTableCSV() {
+  if (!currentSelectedFilePath) {
+    alert('Selecciona una tabla .DBF en el explorador primero.');
+    return;
+  }
+  var url = '/api/export/dbf?path=' + encodeURIComponent(currentSelectedFilePath);
+  triggerDownload(url);
+}
+
+function exportAllToDisk() {
+  if (!confirm('¿Deseas generar y guardar todos los archivos CSV (Productos, Clientes y Ventas) directamente en la carpeta del equipo?')) return;
+
+  fetch('/api/export/save-to-disk', { method: 'POST' })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.success && data.savedFiles && data.savedFiles.length > 0) {
+        alert('✔ Se han guardado ' + data.savedFiles.length + ' archivos CSV en tu equipo:\n\n' + data.savedFiles.join('\n'));
+      } else {
+        alert('Aviso: No se pudieron generar los archivos CSV en el disco.');
+      }
+    })
+    .catch(function(err) {
+      alert('Error guardando archivos CSV: ' + err.message);
+    });
+}
+
