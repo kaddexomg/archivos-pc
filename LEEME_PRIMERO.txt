@@ -44,6 +44,17 @@ MODO 2: EXTRACCION RAPIDA DE ARCHIVOS A EXCEL (CSV / JSON)
         extraer-todo-mixnet.bat
   2. En 3 segundos dejara los archivos limpios y depurados en tu ESCRITORIO.
 
+MODO 3: CONTROL TOTAL Y COPILOTO FINANCIERO IA (CxC, CxP, NOMINA, BANCOS)
+------------------------------------------------------------------------
+  1. Haz DOBLE CLIC en:
+        INICIAR-PANEL-IA.bat
+  2. Se abrira el Panel Ejecutivo en tu navegador en:
+        http://localhost:3300
+  3. Control integral de Cuentas por Cobrar (CxC), Cuentas por Pagar (CxP),
+     Nomina de vendedores oficiales (002 Luis, 004/006 Yovanni, 008 Marianela,
+     014 Andreina, 010/020 Keyder, 005 Caja), saldos en bancos y auditorias
+     automaticas con Gemini AI en 1 clic. Enlazado a la PC Supervisor.
+
 ========================================================================
 ACTUALIZACION VIA GIT:
 ========================================================================
